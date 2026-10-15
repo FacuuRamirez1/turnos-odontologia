@@ -15,10 +15,13 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.security.passwords import hash_password
 from app.infra.db.models import Odontologo, Paciente, Usuario
 
-# Hash demo fijo de 60 chars (formato bcrypt, password descartable solo-dev).
-DEMO_HASH = "$2b$12$" + "K" * 53
+# Password dev documentada (SOLO dev, nunca producción): C-03 hashea de verdad
+# y el spec § passwords exige que todo seed staff autentique con ella (P11: ficticia).
+DEV_PASSWORD = "dev-ficticio-123"
+DEMO_HASH = hash_password(DEV_PASSWORD)
 assert len(DEMO_HASH) == 60
 
 DOMINIO = "clinica-ficticia.example.ar"

@@ -1,6 +1,11 @@
-"""Settings centralizados C-01 — solo env vars, cero secretos hardcodeados (P5)."""
+"""Settings centralizados C-01 — solo env vars, cero secretos hardcodeados (P5).
 
-from pydantic import Field
+C-03 agrega TTLs JWT + `ENVIRONMENT` (falla en producción sin secreto real).
+"""
+
+from typing import Self
+
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,6 +35,26 @@ class Settings(BaseSettings):
     frontend_url: str = Field(default="http://localhost:5173", alias="FRONTEND_URL")
     whatsapp_enabled: bool = Field(default=False, alias="WHATSAPP_ENABLED")
     arca_enabled: bool = Field(default=False, alias="ARCA_ENABLED")
+    # --- Auth JWT C-03 (design D7) ---
+    jwt_access_min: int = Field(default=15, alias="JWT_ACCESS_MIN")
+    jwt_refresh_dias: int = Field(default=7, alias="JWT_REFRESH_DIAS")
+    jwt_action_min: int = Field(default=15, alias="JWT_ACTION_MIN")
+    environment: str = Field(default="dev", alias="ENVIRONMENT")
+
+    @model_validator(mode="after")
+    def _rechazar_secreto_debil_en_produccion(self) -> Self:
+        """P5: en producción no se firma con vacío ni con el placeholder de ejemplo."""
+        if self.environment == "production" and self.jwt_secret in (
+            "",
+            "cambiar-en-produccion",
+        ):
+            raise ValueError("JWT_SECRET debe ser un secreto real en producción (P5).")
+        return self
+
+    @property
+    def cookie_secure(self) -> bool:
+        """`Secure` solo con TLS: http local → False, resto → True (design Riesgos)."""
+        return not self.frontend_url.startswith(("http://localhost", "http://127."))
 
 
 def get_settings() -> Settings:

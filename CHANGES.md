@@ -144,7 +144,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ## FASE 1 — Autenticación
 
 ### [C-03] `auth-jwt-rbac`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Sistema completo de autenticación JWT con RBAC exigible en backend
   - `POST /api/auth/login` — JWT access corto + refresh rotativo, rate limiting 5/60s por IP+email
   - `POST /api/auth/refresh` — rotación con blacklist del anterior; `POST /api/auth/logout` — blacklist; `GET /api/auth/me`

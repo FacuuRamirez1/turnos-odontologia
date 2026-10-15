@@ -4,6 +4,9 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+# B008 (llamadas en defaults) es el idioma estándar de FastAPI Depends(...):
+# el guard RBAC y los endpoints lo usan por diseño (C-03).
+ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.11"

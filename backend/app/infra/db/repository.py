@@ -22,6 +22,11 @@ def _es_scopeada(model: type[T]) -> bool:
     return hasattr(model, "odontologo_id")
 
 
+def es_scopeada(model: type[object]) -> bool:
+    """Pública para `scoped_repository` (C-03): entidad con columna `odontologo_id`."""
+    return hasattr(model, "odontologo_id")
+
+
 class BaseRepository(Generic[T]):
     """Repositorio genérico con filtro `odontologo_id` forzado (RN-AISLAMIENTO)."""
 
