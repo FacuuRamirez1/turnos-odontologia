@@ -1,0 +1,116 @@
+# C-01 — topologia local: api, web, db (PostgreSQL + pgcrypto), redis, mailhog, worker.
+# Puertos y credenciales sobreescribibles por .env (ver README). P13: sin v2.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: turnos
+      POSTGRES_PASSWORD: turnos
+      POSTGRES_DB: turnos
+    ports:
+      - "${PG_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/app/infra/db/init-pgcrypto.sql:/docker-entrypoint-initdb.d/01-pgcrypto.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U turnos -d turnos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_HTTP_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  api:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://turnos:turnos@db:5432/turnos
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-cambiar-en-produccion-dev}
+      MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-TEST-ficticio}
+      MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-cambiar-en-produccion-dev}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USER: ""
+      SMTP_PASS: ""
+      MAIL_FROM: ${MAIL_FROM:-turnos@clinica-ficticia.example.ar}
+      RECORDATORIO_VENTANA_HS: 24
+      RESERVA_TTL_MIN: 15
+      FRONTEND_URL: http://localhost:5173
+      WHATSAPP_ENABLED: "false"
+      ARCA_ENABLED: "false"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 25s
+
+  worker:
+    build: ./backend
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      WORKER_QUEUE: "mail:pendientes"
+    command: python -m app.workers.main
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time;f='/tmp/worker.heartbeat';exit(0 if os.path.exists(f) and time.time()-os.path.getmtime(f)<30 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  web:
+    build: ./frontend
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      VITE_API_BASE_URL: http://localhost:${API_PORT:-8000}
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - ./frontend/src:/app/src:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5173').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 60s
+
+volumes:
+  pgdata:
