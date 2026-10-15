@@ -59,9 +59,9 @@ class BaseRepository(Generic[T]):
         return cast(
             T | None,
             self._base_query(include_inactive).where(
-                self._model.id == entity_id
+                self._model.id == entity_id  # type: ignore[attr-defined]
             ).first(),
-        )  # type: ignore[attr-defined]
+        )
     def add(self, entity: T) -> T:
         """Agrega para commit del caller o del `UnitOfWork` (sin flush implícito)."""
         self._session.add(entity)
