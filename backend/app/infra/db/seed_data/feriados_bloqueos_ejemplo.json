@@ -1,0 +1,17 @@
+{
+  "_comentario": "C-02 §4.1: 1 feriado + 1 bloqueo de ejemplo. Fixture (no tabla): `bloqueo` (pausa|feriado|bloqueo|vacaciones por profesional) se crea en C-04 por Non-Goals de design. C-04 la consume para disponibilidad.",
+  "bloqueos": [
+    {
+      "odontologo_email": "odonto1@clinica-ficticia.example.ar",
+      "desde": "2026-12-24T00:00:00-03:00",
+      "hasta": "2026-12-26T23:59:59-03:00",
+      "motivo": "feriado"
+    },
+    {
+      "odontologo_email": "odonto1@clinica-ficticia.example.ar",
+      "desde": "2026-11-02T13:00:00-03:00",
+      "hasta": "2026-11-02T14:00:00-03:00",
+      "motivo": "bloqueo"
+    }
+  ]
+}

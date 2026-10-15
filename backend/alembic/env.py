@@ -4,11 +4,13 @@ import os
 import sys
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
+
+from alembic import context
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+import app.infra.db.models  # noqa: E402,F401  (registra modelos C-02+ en metadata)
 from app.core.settings import get_settings  # noqa: E402
 from app.infra.db.base import Base  # noqa: E402
 
