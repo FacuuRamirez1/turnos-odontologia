@@ -31,7 +31,7 @@
 ## 6. CI paralela
 
 - [x] 6.1 Crear workflow GitHub Actions con jobs paralelos backend (ruff + mypy + pytest) y frontend (tsc + eslint + build) y verificar con `act -n` o revisión de sintaxis del workflow que ambos jobs están definidos
-- [ ] 6.2 Verificar en el primer push que ambos jobs corren en paralelo y que un fallo en cualquiera bloquea el merge
+- [x] 6.2 Verificar en el primer push que ambos jobs corren en paralelo y que un fallo en cualquiera bloquea el merge (verificado: commits `677a316`+`3b68bec` pusheados a `origin/main`, CI run 38770457136 en verde backend+frontend)
 
 ## 7. Verificación de cierre del change
 

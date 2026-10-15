@@ -105,7 +105,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ## FASE 0 — Cimientos
 
 ### [C-01] `foundation-setup`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Scaffolding completo del monorepo + infraestructura base
   - Estructura `backend/app/{api,core,domain/{turnos,disponibilidad,pagos,devoluciones,notificaciones,reportes},infra/{db,redis,mp,smtp},workers,tests}` + `frontend/src/{pages/{reserva,agenda,bandeja,reportes},components,api,auth}`
   - `backend/`: FastAPI app mínima con `GET /api/health`, Alembic inicializado, `shared/` con settings, logger, db, exceptions
