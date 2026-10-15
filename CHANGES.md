@@ -123,7 +123,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ---
 
 ### [C-02] `core-models-usuarios-pacientes`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Modelos base + migraciones iniciales + seed mínimo + tablas v2 apagadas
   - Modelos: `Usuario` (`email` único, `password_hash`, `rol`, `odontologo_id` nullable, `activo`), `Odontologo` (`user_id`, `monto_turno`, `monto_senia`, `activo`), `Paciente` (`dni` UNIQUE, `consentimiento_datos` bool + fecha)
   - `AuditMixin` (`is_active, created_at, updated_at, deleted_at`), `BaseRepository[T]` con filtro forzado `odontologo_id`, `UnitOfWork`
