@@ -10,7 +10,7 @@ Las lecturas estándar excluyen soft-deleted salvo `include_inactive=True`.
 
 from collections.abc import Callable
 from types import TracebackType
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, cast
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -56,7 +56,7 @@ class BaseRepository(Generic[T]):
 
     def get(self, entity_id: object, include_inactive: bool = False) -> T | None:
         """Lectura por id, también bajo filtro de scope (P8)."""
-        return self._base_query(include_inactive).where(self._model.id == entity_id).first()  # type: ignore[attr-defined]
+        return cast(T | None, self._base_query(include_inactive).where(self._model.id == entity_id).first())  # type: ignore[attr-defined]
 
     def add(self, entity: T) -> T:
         """Agrega para commit del caller o del `UnitOfWork` (sin flush implícito)."""
