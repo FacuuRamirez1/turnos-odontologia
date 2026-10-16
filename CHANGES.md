@@ -186,7 +186,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ---
 
 ### [C-05] `reserva-turnos-estados`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Reserva con máquina de estados + constraints anti-choque + cancelación/reprogramación (épicas A1–A3, A5, B, C1, C3)
   - Modelos: `Turno` (`paciente_id, odontologo_id, inicio, fin, estado, canal, idempotency_key` única, `version` lock optimista), `TurnoHistorial` append-only (`estado_anterior/nuevo, actor_tipo, actor_id, fecha, motivo`)
   - Constraints DB: `UNIQUE (odontologo_id, inicio)` (RN-DOBLE), `EXCLUDE USING gist` anti-solape por profesional (RN-SOLAPE), `CHECK (inicio > now())` (RN-PASADO); revoke UPDATE/DELETE rol app sobre historial
@@ -194,7 +194,10 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
   - Máquina de estados `05 §4` con actor obligatorio por transición (trigger/check RN-ESTADOS): `creado→confirmado`, `confirmado→cancelado/reprogramado/atendido/no_show`, `cancelado→devuelto`
   - Cancelación/reprogramación: muestra regla de seña 100/60/0 **antes** de confirmar (B2); liberación en el mismo commit; reprogramación crea nuevo `confirmado` heredando `pago` (diferencia de monto → abierta Q3, mantener seña original por defecto)
   - Endpoints staff: agenda del día aislada por profesional (C1), `confirmado→atendido/no_show`, `GET /mis-turnos?dni&token`, reserva por teléfono a nombre del paciente (recepcionista)
-  - Tests: concurrencia (no doble-reserva), transiciones válidas/inválidas, TTL pre-reserva, aislamiento
+   - Tests: concurrencia (no doble-reserva), transiciones válidas/inválidas, TTL pre-reserva, aislamiento
+   - **Nota de renumeración (C-05 apply)**: C-05 toma la migración `003` (turno+historial) por orden de
+     dependencias; C-07 pasa a `004`, C-08 a `005`, C-09 a `006` (ver design Riesgo de C-05). Actualizar los
+     números al proponer/archivar esos changes.
 - **Dependencias**: C-04
 - **Governance**: CRITICO
 - **Leer antes**:

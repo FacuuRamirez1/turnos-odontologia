@@ -7,12 +7,15 @@ from fastapi.exceptions import HTTPException
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api.agenda import router as agenda_router
 from app.api.auth import router as auth_router
 from app.api.disponibilidad import router as disponibilidad_router
 from app.api.health import router as health_router
+from app.api.mis_turnos import router as mis_turnos_router
 from app.api.odontologos import router as odontologos_router
 from app.api.pacientes import router as pacientes_router
 from app.api.public_disponibilidad import router as publica_disponibilidad_router
+from app.api.reservas import router as reservas_router
 from app.core.errors import (
     ErrorEnvelope,
     internal_error_handler,
@@ -31,6 +34,9 @@ app.include_router(disponibilidad_router, prefix="/api")
 app.include_router(odontologos_router, prefix="/api")
 app.include_router(pacientes_router, prefix="/api")
 app.include_router(publica_disponibilidad_router, prefix="/api")
+app.include_router(reservas_router, prefix="/api")
+app.include_router(agenda_router, prefix="/api")
+app.include_router(mis_turnos_router, prefix="/api")
 app.add_exception_handler(404, not_found_handler)
 app.add_exception_handler(500, internal_error_handler)
 

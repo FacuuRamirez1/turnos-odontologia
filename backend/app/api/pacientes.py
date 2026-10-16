@@ -16,7 +16,6 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.security.action_tokens import ActionTokenStore, build_action_store
@@ -326,43 +325,26 @@ def editar_ficha(
 def _historial_filas(
     db: Session, paciente_id: uuid.UUID, odontologo_id: uuid.UUID | None = None
 ) -> list[TurnoAcotado]:
-    """Query solo-columnas-contrato (design D3); sin tabla pre-C-05 → `[]`."""
-    try:
-        if odontologo_id is not None:
-            filas = db.execute(
-                text(
-                    "SELECT id, odontologo_id, inicio, fin, estado FROM turno "
-                    "WHERE paciente_id = :pid AND odontologo_id = :oid "
-                    "AND is_active = 1 ORDER BY inicio ASC, id ASC"
-                ),
-                {"pid": str(paciente_id), "oid": str(odontologo_id)},
-            ).mappings()
-        else:
-            filas = db.execute(
-                text(
-                    "SELECT id, odontologo_id, inicio, fin, estado FROM turno "
-                    "WHERE paciente_id = :pid AND is_active = 1 "
-                    "ORDER BY inicio ASC, id ASC"
-                ),
-                {"pid": str(paciente_id)},
-            ).mappings()
-        salida: list[TurnoAcotado] = []
-        for f in list(filas):
-            try:
-                salida.append(
-                    TurnoAcotado(
-                        turno_id=uuid.UUID(str(f["id"])),
-                        odontologo_id=uuid.UUID(str(f["odontologo_id"])),
-                        inicio=f["inicio"],
-                        fin=f["fin"],
-                        estado=str(f["estado"]),
-                    )
-                )
-            except Exception:
-                continue
-        return salida
-    except Exception:
-        return []
+    """Query ORM solo-columnas-contrato (design D3; portable PG/SQLite)."""
+    from app.infra.db.models import Turno
+
+    query = (
+        db.query(Turno)
+        .filter(Turno.paciente_id == paciente_id, Turno.is_active.is_(True))
+        .order_by(Turno.inicio.asc(), Turno.id.asc())
+    )
+    if odontologo_id is not None:
+        query = query.filter(Turno.odontologo_id == odontologo_id)
+    return [
+        TurnoAcotado(
+            turno_id=uuid.UUID(str(f.id)),
+            odontologo_id=uuid.UUID(str(f.odontologo_id)),
+            inicio=f.inicio,
+            fin=f.fin,
+            estado=str(f.estado),
+        )
+        for f in query.all()
+    ]
 
 
 @router.get("/{paciente_id}/turnos", response_model=list[TurnoAcotado])

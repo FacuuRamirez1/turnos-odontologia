@@ -7,7 +7,7 @@ siempre por parámetro (solo env en callers, P5 — este módulo no lee env).
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 
 import jwt as pyjwt
 
@@ -94,15 +94,12 @@ def create_action_token(
 def decode_and_validate(token: str, expected_type: str, secret: str) -> dict[str, Any]:
     """Decodifica HS256 exigiendo claims y `type`; cualquier desvío → AuthError."""
     try:
-        claims = cast(
-            "dict[str, Any]",
-            pyjwt.decode(
-                token,
-                secret,
-                algorithms=[ALGORITHM],
-                leeway=LEEWAY_SECONDS,
-                options={"require": ["sub", "type", "jti", "exp"]},
-            ),
+        claims: dict[str, Any] = pyjwt.decode(
+            token,
+            secret,
+            algorithms=[ALGORITHM],
+            leeway=LEEWAY_SECONDS,
+            options={"require": ["sub", "type", "jti", "exp"]},
         )
     except pyjwt.ExpiredSignatureError as exc:
         raise ExpiredAuthError("token expirado") from exc

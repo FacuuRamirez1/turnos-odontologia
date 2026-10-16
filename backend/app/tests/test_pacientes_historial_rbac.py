@@ -8,7 +8,6 @@
 import uuid
 
 from fastapi.testclient import TestClient
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api.pacientes import reset_paciente_action_store
@@ -52,35 +51,32 @@ def _alta(auth_client: TestClient, dni: str = "99.999.931") -> dict[str, object]
 
 
 def _sembrar_turnos(db_session: Session, paciente_id: str, od_id: str) -> None:
-    db_session.execute(text(TURNO_DDL))
-    db_session.execute(
-        text(
-            "INSERT INTO turno (id, paciente_id, odontologo_id, inicio, fin, estado, is_active)"
-            " VALUES (:id, :pid, :oid, :ini, :fin, :est, 1)"
+    """Siembra contra la tabla real `turno` C-05 (reemplaza el stub DDL pre-C-05).
+
+    El stub crudo (`CREATE TABLE IF NOT EXISTS` sin `canal`/`idempotency_key`)
+    es incompatible con la tabla real; el contrato auditado (columnas del
+    historial acotado) no cambia.
+    """
+    from datetime import datetime
+
+    from app.infra.db.models import Turno
+
+    db_session.add_all([
+        Turno(
+            paciente_id=uuid.UUID(paciente_id), odontologo_id=uuid.UUID(od_id),
+            inicio=datetime.fromisoformat("2026-01-05T10:00:00+00:00"),
+            fin=datetime.fromisoformat("2026-01-05T10:30:00+00:00"),
+            estado="atendido", canal="web",
+            idempotency_key=f"hist-seed-{uuid.uuid4().hex[:12]}",
         ),
-        {
-            "id": str(uuid.uuid4()),
-            "pid": paciente_id,
-            "oid": od_id,
-            "ini": "2026-01-05T10:00:00+00:00",
-            "fin": "2026-01-05T10:30:00+00:00",
-            "est": "atendido",
-        },
-    )
-    db_session.execute(
-        text(
-            "INSERT INTO turno (id, paciente_id, odontologo_id, inicio, fin, estado, is_active)"
-            " VALUES (:id, :pid, :oid, :ini, :fin, :est, 1)"
+        Turno(
+            paciente_id=uuid.UUID(paciente_id), odontologo_id=uuid.UUID(od_id),
+            inicio=datetime.fromisoformat("2026-12-20T10:00:00+00:00"),
+            fin=datetime.fromisoformat("2026-12-20T10:30:00+00:00"),
+            estado="confirmado", canal="web",
+            idempotency_key=f"hist-seed-{uuid.uuid4().hex[:12]}",
         ),
-        {
-            "id": str(uuid.uuid4()),
-            "pid": paciente_id,
-            "oid": od_id,
-            "ini": "2026-12-20T10:00:00+00:00",
-            "fin": "2026-12-20T10:30:00+00:00",
-            "est": "confirmado",
-        },
-    )
+    ])
     db_session.commit()
 
 
@@ -232,22 +228,17 @@ def test_filtro_odontologo_id_optin_43(
     p = _alta(auth_client, "99.999.939")
     pid = str(p["id"])
     od_a, od_b = str(uuid.uuid4()), str(uuid.uuid4())
-    db_session.execute(text(TURNO_DDL))
+    from datetime import datetime
+
+    from app.infra.db.models import Turno
+
     for oid, ini in ((od_a, "2026-01-05T10:00:00+00:00"), (od_b, "2026-02-05T10:00:00+00:00")):
-        db_session.execute(
-            text(
-                "INSERT INTO turno (id, paciente_id, odontologo_id, inicio, fin, estado, is_active)"
-                " VALUES (:id, :pid, :oid, :ini, :fin, :est, 1)"
-            ),
-            {
-                "id": str(uuid.uuid4()),
-                "pid": pid,
-                "oid": oid,
-                "ini": ini,
-                "fin": ini.replace("10:00", "10:30"),
-                "est": "confirmado",
-            },
-        )
+        inicio = datetime.fromisoformat(ini)
+        db_session.add(Turno(
+            paciente_id=uuid.UUID(pid), odontologo_id=uuid.UUID(oid),
+            inicio=inicio, fin=inicio.replace(minute=30),
+            estado="confirmado", canal="web",
+            idempotency_key=f"hist-seed-{uuid.uuid4().hex[:12]}"))
     db_session.commit()
     todo = auth_client.get(f"/api/pacientes/{pid}/turnos", headers=_staff_headers())
     assert todo.status_code == 200, todo.text

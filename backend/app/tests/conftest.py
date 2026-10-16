@@ -66,6 +66,9 @@ def auth_client(
     monkeypatch.setenv("FRONTEND_URL", "https://test.ficticia.example.ar")
     dependencies.configure_security(TEST_AUTH_SECRET, TokenBlacklist(client=None))
     auth_module.reset_rate_limiter()
+    from app.api.reservas import reset_reservas_limiter
+
+    reset_reservas_limiter()
     app.dependency_overrides[get_db] = lambda: db_session
     yield TestClient(app, base_url="https://testserver")
     app.dependency_overrides.clear()

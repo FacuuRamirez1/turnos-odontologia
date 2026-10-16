@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     # --- Disponibilidad C-04 (design D-ANT + D-TZ) ---
     anticipacion_min_hs: int = Field(default=24, alias="ANTICIPACION_MIN_HS")
     timezone: str = Field(default="America/Argentina/Cordoba", alias="TIMEZONE")
+    # --- Reserva pública C-05 (design D8: rate-limit tunable) ---
+    reserva_rate_limit: int = Field(default=10, alias="RESERVA_RATE_LIMIT")
 
     @model_validator(mode="after")
     def _rechazar_secreto_debil_en_produccion(self) -> Self:

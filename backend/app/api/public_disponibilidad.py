@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.core.settings import get_settings
 from app.domain.disponibilidad.motor import Slot, generar_slots, resolver_zona
+from app.domain.turnos.ocupados import ocupados_rango
 from app.infra.db.models import Bloqueo, Disponibilidad, Odontologo
 from app.infra.db.session import get_db
 from app.infra.redis.rate_limit import (
@@ -136,6 +137,16 @@ def huecos_libres(
         for b in bloqueos_db
     ]
     ahora = datetime.now(UTC)
+    # C-05 (design D7, delta spec): resta turnos activos del profesional/día
+    # (`creado` no-vencido + `confirmado`); el resto libera por cómputo.
+    ocupados_db = ocupados_rango(
+        db, odontologo_id, inicio_dia, fin_dia,
+        settings.reserva_ttl_min, ahora)
+    ocupados = [
+        Slot(inicio=o[0] if o[0].tzinfo else o[0].replace(tzinfo=UTC),
+             fin=o[1] if o[1].tzinfo else o[1].replace(tzinfo=UTC))
+        for o in ocupados_db
+    ]
     salida: list[SlotOut] = []
     for f in vigentes:
         for s in generar_slots(
@@ -148,7 +159,7 @@ def huecos_libres(
             ahora=ahora,
             anticipacion_hs=settings.anticipacion_min_hs,
             bloqueos=bloques,
-            ocupados=[],
+            ocupados=ocupados,
             tz=zona,
         ):
             salida.append(SlotOut(inicio=s.inicio, fin=s.fin))
