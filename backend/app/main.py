@@ -8,7 +8,10 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.auth import router as auth_router
+from app.api.disponibilidad import router as disponibilidad_router
 from app.api.health import router as health_router
+from app.api.odontologos import router as odontologos_router
+from app.api.public_disponibilidad import router as publica_disponibilidad_router
 from app.core.errors import (
     ErrorEnvelope,
     internal_error_handler,
@@ -23,6 +26,9 @@ app = FastAPI(title="Turnos Odontología", version="0.1.0")
 app.middleware("http")(logging_middleware)
 app.include_router(health_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
+app.include_router(disponibilidad_router, prefix="/api")
+app.include_router(odontologos_router, prefix="/api")
+app.include_router(publica_disponibilidad_router, prefix="/api")
 app.add_exception_handler(404, not_found_handler)
 app.add_exception_handler(500, internal_error_handler)
 

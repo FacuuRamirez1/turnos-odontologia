@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     jwt_refresh_dias: int = Field(default=7, alias="JWT_REFRESH_DIAS")
     jwt_action_min: int = Field(default=15, alias="JWT_ACTION_MIN")
     environment: str = Field(default="dev", alias="ENVIRONMENT")
+    # --- Disponibilidad C-04 (design D-ANT + D-TZ) ---
+    anticipacion_min_hs: int = Field(default=24, alias="ANTICIPACION_MIN_HS")
+    timezone: str = Field(default="America/Argentina/Cordoba", alias="TIMEZONE")
 
     @model_validator(mode="after")
     def _rechazar_secreto_debil_en_produccion(self) -> Self:

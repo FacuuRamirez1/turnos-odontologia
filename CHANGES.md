@@ -167,7 +167,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 > C-04 y C-06 pueden proponerse en paralelo. C-04 debe archivarse antes de C-05.
 
 ### [C-04] `disponibilidad-slots`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Disponibilidad por odontólogo + motor de slots ofrecibles (épica C2)
   - Modelos: `Disponibilidad` (`odontologo_id, dia_semana, hora_inicio, hora_fin, duracion_min, tope_dia, vigente_desde/hasta`), `Bloqueo` (`desde, hasta, motivo: pausa|feriado|bloqueo|vacaciones, created_by`)
   - Migración 002: tablas disponibilidad + bloqueo

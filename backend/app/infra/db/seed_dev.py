@@ -9,14 +9,14 @@ Feriado + bloqueo de ejemplo: fixture JSON en `seed_data/` (tabla `bloqueo`
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy.orm import Session
 
 from app.core.security.passwords import hash_password
-from app.infra.db.models import Odontologo, Paciente, Usuario
+from app.infra.db.models import Bloqueo, Disponibilidad, Odontologo, Paciente, Usuario
 
 # Password dev documentada (SOLO dev, nunca producción): C-03 hashea de verdad
 # y el spec § passwords exige que todo seed staff autentique con ella (P11: ficticia).
@@ -110,9 +110,58 @@ PACIENTES: list[dict[str, Any]] = [
     )
 ]
 
+# C-04: disponibilidad L–V 9–17 por odontólogo (04 §5: 30 min, tope 14/día).
+# IDs deterministas (uuid5) → re-corridas colisionan en PK y se ignoran (P13: nada v2).
+VIGENTE_DESDE = date(2026, 1, 1)
+VIGENTE_HASTA = date(2026, 12, 31)
+DISPONIBILIDAD: list[dict[str, Any]] = [
+    {
+        "id": uuid.uuid5(uuid.NAMESPACE_OID, f"disponibilidad-{od}-{dia}"),
+        "odontologo_id": od,
+        "dia_semana": dia,
+        "hora_inicio": time(9, 0),
+        "hora_fin": time(17, 0),
+        "duracion_min": 30,
+        "tope_dia": 14,
+        "vigente_desde": VIGENTE_DESDE,
+        "vigente_hasta": VIGENTE_HASTA,
+        "is_active": True,
+    }
+    for od in (ID_ODONTO_1, ID_ODONTO_2)
+    for dia in range(5)
+]
+
+# C-04: 1 feriado = 2 filas (D-BLOQ, una por profesional) + 1 bloqueo ejemplo.
+# Espeja `seed_data/feriados_bloqueos_ejemplo.json` (DNIs ficticios P11: n/a aquí).
+CORDOBA_FERIADO_DESDE = datetime(2026, 12, 24, 0, 0)
+CORDOBA_FERIADO_HASTA = datetime(2026, 12, 26, 23, 59, 59)
+BLOQUEOS: list[dict[str, Any]] = [
+    {
+        "id": uuid.uuid5(uuid.NAMESPACE_OID, f"bloqueo-feriado-{od}"),
+        "odontologo_id": od,
+        "desde": CORDOBA_FERIADO_DESDE,
+        "hasta": CORDOBA_FERIADO_HASTA,
+        "motivo": "feriado",
+        "created_by": None,
+        "is_active": True,
+    }
+    for od in (ID_ODONTO_1, ID_ODONTO_2)
+] + [
+    {
+        "id": uuid.uuid5(uuid.NAMESPACE_OID, "bloqueo-ejemplo-odonto1"),
+        "odontologo_id": ID_ODONTO_1,
+        "desde": datetime(2026, 11, 2, 13, 0),
+        "hasta": datetime(2026, 11, 2, 14, 0),
+        "motivo": "bloqueo",
+        "created_by": None,
+        "is_active": True,
+    }
+]
+
 
 def _insert_do_nothing(
-    session: Session, model: type[Usuario] | type[Odontologo] | type[Paciente],
+    session: Session,
+    model: type[Usuario] | type[Odontologo] | type[Paciente] | type[Disponibilidad] | type[Bloqueo],
     rows: list[dict[str, Any]],
 ) -> None:
     """`INSERT … ON CONFLICT DO NOTHING` portable (PG prod, SQLite tests)."""
@@ -133,6 +182,8 @@ def seed(session: Session) -> None:
     _insert_do_nothing(session, Usuario, USUARIOS)
     _insert_do_nothing(session, Odontologo, PERFILES)
     _insert_do_nothing(session, Paciente, PACIENTES)
+    _insert_do_nothing(session, Disponibilidad, DISPONIBILIDAD)
+    _insert_do_nothing(session, Bloqueo, BLOQUEOS)
     session.commit()
 
 
