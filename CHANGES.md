@@ -207,7 +207,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ---
 
 ### [C-06] `ficha-paciente-consentimiento`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Ficha mínima de paciente + consentimiento + historial acotado (épica F1)
   - Endpoints: CRUD ficha mínima (contacto, DNI, consentimiento), `GET /pacientes?dni=` reconocimiento con precarga (A2), historial de turnos acotado pasados/futuros sin nada clínico
   - RN-CONSENTIMIENTO enforced: sin consentimiento registrado no se persiste ficha (error explícito en `POST /reservas` y en alta manual)
