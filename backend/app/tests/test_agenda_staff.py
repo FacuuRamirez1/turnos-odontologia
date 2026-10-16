@@ -10,11 +10,13 @@ Escenarios (U2 feliz / error-negocio / borde):
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import cast
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.security.jwt import create_access_token
+from app.infra.db.models import Usuario
 from app.tests.conftest import TEST_AUTH_SECRET
 
 
@@ -53,9 +55,9 @@ def _sembrar(db_session: Session) -> dict[str, object]:
             "ua": ua, "ub": ub, "ur": ur}
 
 
-def _token(usuario: object, rol: str, od_id: object = None) -> dict[str, str]:
+def _token(usuario: Usuario, rol: str, od_id: object = None) -> dict[str, str]:
     t = create_access_token(
-        sub=str(usuario.id), rol=rol, secret=TEST_AUTH_SECRET,  # type: ignore[attr-defined]
+        sub=str(usuario.id), rol=rol, secret=TEST_AUTH_SECRET,
         odontologo_id=str(od_id) if od_id is not None else None)
     return {"Authorization": f"Bearer {t}"}
 
@@ -65,8 +67,9 @@ def test_odontologo_ve_solo_su_agenda_feliz(
 ) -> None:
     ctx = _sembrar(db_session)
     r = auth_client.get("/api/agenda",
-                        params={"fecha": ctx["fecha"], "odontologo_id": str(ctx["od_a"])},
-                        headers=_token(ctx["ua"], "odontologo", ctx["od_a"]))
+                        params={"fecha": cast(str, ctx["fecha"]),
+                                "odontologo_id": str(ctx["od_a"])},
+                        headers=_token(cast(Usuario, ctx["ua"]), "odontologo", ctx["od_a"]))
     assert r.status_code == 200, r.text
     turnos = r.json()
     assert len(turnos) == 1
@@ -84,7 +87,7 @@ def test_odontologo_en_ruta_telefonica_403_negocio(
               "dni": "55550001", "nombre": "T", "apellido": "F",
               "consentimiento_datos": True,
               "consentimiento_fecha": "2030-01-01T09:00:00+00:00"},
-        headers={**_token(ctx["ua"], "odontologo", ctx["od_a"]),
+        headers={**_token(cast(Usuario, ctx["ua"]), "odontologo", ctx["od_a"]),
                  "Idempotency-Key": f"rk-{uuid.uuid4().hex[:12]}"})
     assert r.status_code == 403, r.text
 
@@ -95,14 +98,15 @@ def test_odontologo_no_ve_ajenos_aunque_haya_seed_cruzado_borde(
     ctx = _sembrar(db_session)
     # Pide la agenda de B con identidad de A → 403, nunca datos ajenos.
     r = auth_client.get("/api/agenda",
-                        params={"fecha": ctx["fecha"], "odontologo_id": str(ctx["od_b"])},
-                        headers=_token(ctx["ua"], "odontologo", ctx["od_a"]))
+                        params={"fecha": cast(str, ctx["fecha"]),
+                                "odontologo_id": str(ctx["od_b"])},
+                        headers=_token(cast(Usuario, ctx["ua"]), "odontologo", ctx["od_a"]))
     assert r.status_code == 403, r.text
     # Y su propia agenda no filtra nada de B.
     propia = auth_client.get(
         "/api/agenda",
-        params={"fecha": ctx["fecha"], "odontologo_id": str(ctx["od_a"])},
-        headers=_token(ctx["ua"], "odontologo", ctx["od_a"]))
+        params={"fecha": cast(str, ctx["fecha"]), "odontologo_id": str(ctx["od_a"])},
+        headers=_token(cast(Usuario, ctx["ua"]), "odontologo", ctx["od_a"]))
     assert propia.status_code == 200
     assert {t["odontologo_id"] for t in propia.json()} == {str(ctx["od_a"])}
 
@@ -129,7 +133,7 @@ def test_recepcionista_reserva_telefonica_201_borde(
               "dni": "55550002", "nombre": "Tel", "apellido": "Fonica",
               "consentimiento_datos": True,
               "consentimiento_fecha": "2030-01-01T09:00:00+00:00"},
-        headers={**_token(ctx["ur"], "recepcionista"),
+        headers={**_token(cast(Usuario, ctx["ur"]), "recepcionista"),
                  "Idempotency-Key": f"rk-{uuid.uuid4().hex[:12]}"})
     assert r.status_code == 201, r.text
     assert r.json()["canal"] == "recepcion"

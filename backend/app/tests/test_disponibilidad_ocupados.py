@@ -57,7 +57,7 @@ def test_confirmado_resta_del_motor_feliz(
     ctx = _contexto(db_session)
     r = auth_client.get("/api/disponibilidad",
                         params={"odontologo_id": str(ctx["od_id"]),
-                                "fecha": ctx["fecha"]})
+                                "fecha": cast(str, ctx["fecha"])})
     assert r.status_code == 200, r.text
     inicios = [s["inicio"] for s in r.json()["slots"]]
     assert ctx["slot_ocupado"] not in inicios
@@ -95,6 +95,6 @@ def test_creado_vencido_cuenta_libre_borde(
 
     r = auth_client.get("/api/disponibilidad",
                         params={"odontologo_id": str(ctx["od_id"]),
-                                "fecha": ctx["fecha"]})
+                                "fecha": cast(str, ctx["fecha"])})
     assert r.status_code == 200, r.text
     assert len(r.json()["slots"]) == 2

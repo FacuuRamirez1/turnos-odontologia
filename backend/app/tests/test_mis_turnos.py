@@ -9,6 +9,7 @@ Escenarios (U2 feliz / error-negocio / borde):
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import cast
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -55,7 +56,8 @@ def test_token_propio_devuelve_solo_sus_turnos_feliz(
 ) -> None:
     ctx = _sembrar(db_session)
     r = auth_client.get("/api/mis-turnos",
-                        params={"dni": ctx["dni_p1"], "token": ctx["token_p1"]})
+                        params={"dni": cast(str, ctx["dni_p1"]),
+                                "token": cast(str, ctx["token_p1"])})
     assert r.status_code == 200, r.text
     turnos = r.json()
     assert len(turnos) == 1
@@ -65,7 +67,7 @@ def test_dni_solo_sin_token_401_negocio(
     auth_client: TestClient, db_session: Session,
 ) -> None:
     ctx = _sembrar(db_session)
-    r = auth_client.get("/api/mis-turnos", params={"dni": ctx["dni_p1"]})
+    r = auth_client.get("/api/mis-turnos", params={"dni": cast(str, ctx["dni_p1"])})
     assert r.status_code == 401, r.text
 
 
@@ -78,5 +80,5 @@ def test_token_ajeno_403_borde(
     ajeno = issue_action_token(destino="99999999", proposito="mis-turnos",
                                secret=TEST_AUTH_SECRET)
     r = auth_client.get("/api/mis-turnos",
-                        params={"dni": ctx["dni_p1"], "token": ajeno})
+                        params={"dni": cast(str, ctx["dni_p1"]), "token": ajeno})
     assert r.status_code == 403, r.text
