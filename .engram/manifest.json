@@ -32,6 +32,14 @@
       "sessions": 0,
       "memories": 1,
       "prompts": 0
+    },
+    {
+      "id": "27d58732",
+      "created_by": "mnvva",
+      "created_at": "2026-11-05T16:12:08.9250571Z",
+      "sessions": 1,
+      "memories": 4,
+      "prompts": 0
     }
   ]
 }
