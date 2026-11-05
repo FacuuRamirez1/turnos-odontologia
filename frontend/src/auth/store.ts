@@ -1,31 +1,17 @@
-export type UserRole = "paciente" | "odontologo" | "recepcionista" | "admin";
+let accessToken: string | null = null;
 
-export interface AuthState {
-  accessToken: string | null;
-  role: UserRole | null;
-  odontologoId: string | null;
+export function getAccessToken(): string | null {
+  return accessToken;
 }
 
-const initialAuthState: AuthState = {
-  accessToken: null,
-  role: null,
-  odontologoId: null,
-};
-
-let currentAuthState: AuthState = { ...initialAuthState };
-
-export function getAuthState(): AuthState {
-  return { ...currentAuthState };
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
 }
 
-export function setAuthState(next: AuthState): void {
-  currentAuthState = { ...next };
-}
-
-export function clearAuthState(): void {
-  currentAuthState = { ...initialAuthState };
+export function clearAccessToken(): void {
+  accessToken = null;
 }
 
 export function isAuthenticated(): boolean {
-  return currentAuthState.accessToken !== null;
+  return accessToken !== null;
 }

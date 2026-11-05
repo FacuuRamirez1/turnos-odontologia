@@ -39,6 +39,7 @@ C-01 foundation-setup
               │                         └── C-13 hardening-cumplimiento-cierre (+ C-09, + C-11)
               │
               └── C-06 ficha-paciente-consentimiento  ← paralelo con C-04/C-05
+                    └── C-07F frontend-interfaz-agenda ← intermedio (no bloquea C-07 pagos)
 ```
 
 ### Paralelismo por fase
@@ -61,6 +62,9 @@ GATE 3: C-03 ✓                     ← PRIMER FORK (2 paralelos)
 
 GATE 4: C-04 ✓
   → C-05 reserva-turnos-estados     [Agente A]
+
+GATE 4.5: C-05 ✓ + C-06 ✓
+  → C-07F frontend-interfaz-agenda   [Agente C] (intermedio, no bloquea C-07)
 
 GATE 5: C-05 ✓
   → C-07 pagos-mp-checkout-webhook [Agente A]
@@ -226,6 +230,30 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 
 ---
 
+## FASE 2.5 — Frontend acotado (intermedio)
+
+> Change intermedio para operar el sistema con los endpoints ya existentes. Se registra como **C-07F** para no colisionar con **C-07** (`pagos-mp-checkout-webhook`), que conserva su número y sigue pendiente.
+
+### [C-07F] `frontend-interfaz-agenda`
+- **Estado**: `[x]` completado
+- **Scope**: SPA de operador acotada sobre los contratos de C-03/C-05/C-06
+  - Sesión JWT: login, bootstrap por refresh HttpOnly, `/me`, logout; access token solo en memoria (sin localStorage), 401 centralizado
+  - Capa API TypeScript estricta espejo de los schemas existentes, con `ApiError` para los tres envelopes de error
+  - Agenda del día: fecha + profesional, aislamiento por rol (odontólogo fija su propio `odontologo_id`; recepción/admin ingresan UUID), estados loading/vacío/error/retry
+  - Acciones `Atendido`/`No show` solo para `confirmado`, con guarda temporal de no-show y refetch en paralelo
+  - Ficha de paciente: `GET /pacientes/{id}` + `GET /pacientes/{id}/turnos` en paralelo, consentimiento e historial acotado; sin persistir datos en el navegador
+  - Diseño accesible “bitácora clínica”, TypeScript sin `any`, gate `typecheck + lint + build` limpio
+- **Dependencias**: C-03, C-05, C-06
+- **Governance**: MEDIO
+- **Leer antes**:
+  - `knowledge-base/03_actores_y_roles.md` §1–§2 (roles y matriz RBAC)
+  - `knowledge-base/06_funcionalidades.md` §Épica C C1 + §Épica F F1
+  - `knowledge-base/07_flujos_principales.md` F1–F3
+  - `knowledge-base/08_arquitectura_propuesta.md` §3 (seguridad JWT)
+- **Brecha/follow-up**: no existe `GET /api/odontologos` (solo `PATCH /api/odontologos/montos`), por lo que recepción/admin deben ingresar el UUID del profesional. Agregar un endpoint de directorio (id + nombre) en un change posterior, junto con el nombre del paciente en `TurnoAgendaOut` para evitar N+1 de fichas.
+
+---
+
 ## FASE 3 — Pagos (MercadoPago)
 
 ### [C-07] `pagos-mp-checkout-webhook`
@@ -384,6 +412,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 | C-04 | disponibilidad-slots | 2 Turnos | MEDIO | C-03 |
 | C-05 | reserva-turnos-estados | 2 Turnos | CRITICO | C-04 |
 | C-06 | ficha-paciente-consentimiento | 2 Turnos | MEDIO | C-03 |
+| C-07F | frontend-interfaz-agenda | 2.5 Frontend acotado | MEDIO | C-03, C-05, C-06 |
 | C-07 | pagos-mp-checkout-webhook | 3 Pagos | CRITICO | C-05 |
 | C-08 | devoluciones-comprobantes-conciliacion | 3 Pagos | CRITICO | C-07 |
 | C-09 | mails-recordatorios | 4 Notif | ALTO | C-05, C-07 |
