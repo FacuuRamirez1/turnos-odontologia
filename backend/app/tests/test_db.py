@@ -30,6 +30,9 @@ def test_sin_create_all_en_backend_borde() -> None:
         str(p)
         for p in root.rglob("*.py")
         if "tests" not in p.parts
+        and "venv" not in p.parts
+        and ".git" not in p.parts
+        and "site-packages" not in p.parts
         and ".create_all(" in p.read_text(encoding="utf-8").replace(" ", "")
     ]
     assert hits == []

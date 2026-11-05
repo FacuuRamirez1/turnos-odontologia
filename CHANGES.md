@@ -302,16 +302,16 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ## FASE 4 — Notificaciones (mail-only v1)
 
 ### [C-09] `mails-recordatorios`
-- **Estado**: `[ ]` pendiente
-- **Scope**: Mail transaccional + recordatorios con confirmar/cancelar desde el mail (épica E completa)
-  - Modelo `RecordatorioMail` (`turno_id, tipo, destinatario, plantilla_version, estado encolado|enviado|reintentando|fallido|confirmado_desde_mail|cancelado_desde_mail, intentos, token_accion` hash único con expiración) + migración 005
-  - Workers Redis separados del request path: colas, reintentos backoff 3 intentos, scheduler de ventana configurable `RECORDATORIO_VENTANA_HS`
-  - Mails: confirmación inmediata al reservar (A3, tras `aprobado`), recordatorio en ventana (E1), aviso de devolución con comprobante (F2); plantillas versionadas
-  - `GET /mail/confirmar?token=` / `/mail/cancelar?token=` — tokens firmados un solo uso, vida corta; cancelar deriva a F2 mostrando regla de seña (E2)
-  - Config entregabilidad: `MAIL_FROM` alineado, docs SPF/DKIM/DMARC del dominio, métricas de entrega visibles (E3); fallo de alineación → `fallido` sin reintento infinito
-  - Puerto/adaptador de notificaciones: WhatsApp **[v2]** conector apagado reutilizando `turno_id` + `plantilla_version` sin migraciones
-  - Tests: scheduler ventana, backoff, token un uso/expirado, métricas
-- **Dependencias**: C-05, C-07
+- **Estado**: `[x]` completado
+- **Scope**: Subsistema de notificaciones mail-only v1 (épica E completa en núcleo; productor de confirmación C-07 y productor de aviso de devolución C-08 pendiente de integración).
+  - Modelo `RecordatorioMail` (`turno_id, tipo, destinatario, plantilla_version, estado encolado|enviado|reintentando|fallido|confirmado_desde_mail|cancelado_desde_mail, intentos, token_accion` hash único con expiración) + **migración 004** (head real `003`; cuando se implementen C-07/C-08 se renumeran a 005/006).
+  - Workers Redis separados del request path: colas, reintentos backoff 3 intentos, scheduler de ventana configurable `RECORDATORIO_VENTANA_HS`.
+  - Mails: confirmación al reservar/al confirmar (A3, enganchada en `transition()` `creado→confirmado` actor `sistema` para C-07), recordatorio en ventana (E1), aviso de devolución con cotización seña (F2 sin reembolso real hasta C-08); plantillas versionadas.
+  - `GET /api/mail/confirmar?token=` / `/api/mail/cancelar?token=` — tokens firmados un solo uso, vida corta, hash en DB y consumo en DB; cancelar deriva a F2 mostrando regla de seña (E2).
+  - Config entregabilidad: `MAIL_FROM` alineado, docs SPF/DKIM/DMARC del dominio, métricas de entrega visibles (E3); fallo sin reintento infinito.
+  - Puerto/adaptador de notificaciones: WhatsApp **[v2]** conector apagado; `mail:pendientes` lista para C-07/C-08.
+  - Tests: migración 004, modelo, tokens, plantillas, SMTP fake, outbox, worker (éxito/fallo/tercer fallo/replay), scheduler, endpoints, rate-limit, métricas.
+- **Dependencias**: C-05, C-07 (C-07 no existe aún: el hook de confirmación queda listo y testeado; C-08 no existe: aviso de devolución es servicio de dominio sin productor real).
 - **Governance**: ALTO
 - **Leer antes**:
   - `knowledge-base/07_flujos_principales.md` F4 (recordatorio por mail)

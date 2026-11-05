@@ -11,6 +11,7 @@ from app.api.agenda import router as agenda_router
 from app.api.auth import router as auth_router
 from app.api.disponibilidad import router as disponibilidad_router
 from app.api.health import router as health_router
+from app.api.mail import router as mail_router
 from app.api.mis_turnos import router as mis_turnos_router
 from app.api.odontologos import router as odontologos_router
 from app.api.pacientes import router as pacientes_router
@@ -37,6 +38,7 @@ app.include_router(publica_disponibilidad_router, prefix="/api")
 app.include_router(reservas_router, prefix="/api")
 app.include_router(agenda_router, prefix="/api")
 app.include_router(mis_turnos_router, prefix="/api")
+app.include_router(mail_router, prefix="/api")
 app.add_exception_handler(404, not_found_handler)
 app.add_exception_handler(500, internal_error_handler)
 

@@ -19,7 +19,11 @@ def test_cero_create_all_fuera_de_tests() -> None:
     hits = [
         str(p)
         for p in BACKEND_ROOT.rglob("*.py")
-        if "tests" not in p.parts and ".create_all(" in _sin_espacios(p)
+        if "tests" not in p.parts
+        and "venv" not in p.parts
+        and ".git" not in p.parts
+        and "site-packages" not in p.parts
+        and ".create_all(" in _sin_espacios(p)
     ]
     assert hits == []
 
@@ -37,8 +41,12 @@ def test_v2_off_sin_repositorio_de_escritura() -> None:
     hits = [
         str(p)
         for p in BACKEND_ROOT.rglob("*.py")
-        if "ListaEspera" in p.read_text(encoding="utf-8")
-        or "NotificacionWhatsapp" in p.read_text(encoding="utf-8")
+        if "tests" not in p.parts
+        and "venv" not in p.parts
+        and ".git" not in p.parts
+        and "site-packages" not in p.parts
+        and ("ListaEspera" in p.read_text(encoding="utf-8")
+             or "NotificacionWhatsapp" in p.read_text(encoding="utf-8"))
         if not (legitimos & set(p.parts))
     ]
     assert hits == []

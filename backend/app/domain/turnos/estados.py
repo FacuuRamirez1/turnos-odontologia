@@ -99,6 +99,13 @@ def transition(
         fecha=referencia if referencia.tzinfo else referencia.replace(tzinfo=UTC),
         motivo=motivo,
     ))
+    # C-09: outbox transaccional. Al confirmar (`creado→confirmado`) por el
+    # sistema, encolar el mail de confirmación en la MISMA transacción.
+    # Import diferido para evitar ciclo (estados → notificaciones.outbox).
+    if (origen, destino) == ("creado", "confirmado") and actor_tipo == "sistema":
+        from app.domain.notificaciones.outbox import encolar_confirmacion
+
+        encolar_confirmacion(session, turno)
     try:
         session.flush()
     except IntegrityError as exc:

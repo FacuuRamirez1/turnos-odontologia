@@ -79,12 +79,26 @@ services:
   worker:
     build: ./backend
     depends_on:
+      db:
+        condition: service_healthy
       redis:
+        condition: service_healthy
+      mailhog:
         condition: service_healthy
       api:
         condition: service_healthy
     environment:
+      DATABASE_URL: postgresql+psycopg://turnos:turnos@db:5432/turnos
       REDIS_URL: redis://redis:6379/0
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_USER: ""
+      SMTP_PASS: ""
+      MAIL_FROM: ${MAIL_FROM:-turnos@clinica-ficticia.example.ar}
+      MAIL_ACTION_TTL_MIN: 2880
+      MAIL_RATE_LIMIT: 30
+      API_PUBLIC_URL: http://localhost:8000
+      WORKER_SCHEDULER_TICK_S: 60
       WORKER_QUEUE: "mail:pendientes"
     command: python -m app.workers.main
     healthcheck:
