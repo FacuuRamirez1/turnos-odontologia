@@ -3,7 +3,10 @@
 > Índice canónico de todos los changes del proyecto **turnos-odontología** (sistema web de turnos odontológicos, Argentina, single-sede v1).
 > Cada change es atómico: un agente puede implementarlo en una sesión (~4-6 horas).
 > **Leer este archivo antes de ejecutar cualquier `/opsx:propose`.**
-> Corte de alcance: **P2=b (v1 completo junto)** — reserva + agenda + seña real MP + mail se construyen juntos (D1); el recorte cae sobre reportes/UX, nunca sobre pagos/auditoría (D2).
+> Corte de alcance: **P2=b (v1 completo junto)** — reserva + agenda + seña + mail se construyen juntos (D1); el recorte cae sobre reportes/UX, nunca sobre pagos/auditoría (D2).
+> **D14 (2026-11-05)**: en el MVP la seña se cobra con un **proveedor de pagos simulado** (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; MercadoPago real queda diseñado, no construido (v2/producción). El camino crítico y las dependencias no cambian; C-07 y C-08 siguen pendientes con alcance reescrito (ver `knowledge-base/11_pagos_mercadopago.md` §0).
+> **Nombres**: el change archivado en openspec como "C-07" es **C-07F** (frontend-interfaz-agenda); el **C-07** de este índice es **pagos** (`pagos-mp-checkout-webhook`, pendiente).
+> **Migraciones**: head actual = `004_recordatorio_mail` (C-09); C-07 → `005`, C-08 → `006`.
 
 ---
 
@@ -115,7 +118,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
   - `backend/`: FastAPI app mínima con `GET /api/health`, Alembic inicializado, `shared/` con settings, logger, db, exceptions
   - `frontend/`: Vite + React + TypeScript scaffolding, auth store base, `.env.example` en cada sub-proyecto
   - `docker-compose.yml`: servicios `api, web, db (PostgreSQL + pgcrypto), redis, mailhog, worker` con healthchecks y volúmenes pgdata
-  - `.env.example` con lista mínima de `08 §4` (`DATABASE_URL, REDIS_URL, JWT_SECRET, MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET, SMTP_*, MAIL_FROM, RECORDATORIO_VENTANA_HS, RESERVA_TTL_MIN, FRONTEND_URL, WHATSAPP_ENABLED=false, ARCA_ENABLED=false`)
+  - `.env.example` con lista mínima de `08 §4` (`DATABASE_URL, REDIS_URL, JWT_SECRET, MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET, SMTP_*, MAIL_FROM, RECORDATORIO_VENTANA_HS, RESERVA_TTL_MIN, FRONTEND_URL, WHATSAPP_ENABLED=false, ARCA_ENABLED=false`). *Nota D14*: el contrato de entorno suma `PAGO_MODO=simulado|mercadopago` (default `simulado`) y `MP_ACCESS_TOKEN`/`MP_PUBLIC_KEY` pasan a opcionales (solo requeridas con `PAGO_MODO=mercadopago`); el ajuste de `settings.py` y `test_env_contract.py` es tarea de C-07
   - CI GitHub Actions: jobs paralelos backend + frontend; secretos solo via env vars
 - **Dependencias**: ninguna
 - **Governance**: BAJO
@@ -200,8 +203,8 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
   - Endpoints staff: agenda del día aislada por profesional (C1), `confirmado→atendido/no_show`, `GET /mis-turnos?dni&token`, reserva por teléfono a nombre del paciente (recepcionista)
    - Tests: concurrencia (no doble-reserva), transiciones válidas/inválidas, TTL pre-reserva, aislamiento
    - **Nota de renumeración (C-05 apply)**: C-05 toma la migración `003` (turno+historial) por orden de
-     dependencias; C-07 pasa a `004`, C-08 a `005`, C-09 a `006` (ver design Riesgo de C-05). Actualizar los
-     números al proponer/archivar esos changes.
+     dependencias; C-07 pasaba a `004`, C-08 a `005`, C-09 a `006` (ver design Riesgo de C-05). **Actualización**: C-09 tomó
+     la `004` (`004_recordatorio_mail`, head actual), por lo que **C-07 → `005` y C-08 → `006`**.
 - **Dependencias**: C-04
 - **Governance**: CRITICO
 - **Leer antes**:
@@ -254,46 +257,52 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 
 ---
 
-## FASE 3 — Pagos (MercadoPago)
+## FASE 3 — Pagos (simulados en MVP, D14)
 
 ### [C-07] `pagos-mp-checkout-webhook`
 - **Estado**: `[ ]` pendiente
-- **Scope**: Seña real vía MercadoPago: checkout + webhook idempotente + conciliación (épica D base, F1/F5)
-  - Modelos: `Pago` (separado del turno, D13) con `mp_payment_id` único, `mp_preference_id`, estados `pendiente|aprobado|rechazado|...`, `idempotency_key` única; `EventoPago` append-only sin UPDATE/DELETE
-  - Migración 003: tablas pago + evento_pago
-  - Checkout: reserva crea `turno(creado)` + `pago(pendiente)` + preferencia MP por monto de seña del odontólogo; **nunca** confirmar por callback frontend, solo webhook server-to-server
-  - `POST /webhooks/mercadopago`: valida firma (`MP_WEBHOOK_SECRET`) → persiste `webhook_recibido` con payload crudo → procesa por `mp_payment_id` con idempotencia (replay seguro): `aprobado` → turno `confirmado`; `rechazado` → turno `cancelado` + aviso
-  - Outbox/escritura atómica turno+pago+evento antes de llamar a MP (nunca cobrar sin rastro local)
-  - Job diario conciliación: local vs. API MP por `mp_payment_id`; discrepancias → evento `conciliado` + alerta en bandeja
-  - Abiertas Q1/Q2 (monto default, credenciales/titular MP) → defaults configurables por env/DB, documentados
-  - Tests: webhook válido/inválido (firma), replay idempotente, expiración pre-reserva, conciliación con discrepancia
+- **Scope**: Seña vía **proveedor de pagos simulado** (D14): checkout simulado + webhook idempotente firmado + conciliación interna (épica D base, F1/F5). MercadoPago real (`PAGO_MODO=mercadopago`) queda diseñado, **no construido** en el MVP
+  - Puerto `ProveedorPago` + adaptador `simulado` (`infra/pago_simulado`); selección por `PAGO_MODO=simulado|mercadopago` (default `simulado`). `MP_ACCESS_TOKEN`/`MP_PUBLIC_KEY` opcionales (solo con `mercadopago`); `MP_WEBHOOK_SECRET` se usa también en simulado (el adaptador firma con HMAC y entrega al **mismo** handler del webhook)
+  - Modelos: `Pago` (separado del turno, D13) con `proveedor ∈ {simulado, mercadopago}`, `mp_payment_id` único (sintético `sim_pay_<uuid>`), `mp_preference_id` nullable, estados `pendiente|aprobado|rechazado|...`, `idempotency_key` única; `EventoPago` append-only sin UPDATE/DELETE
+  - Migración **005**: tablas pago + evento_pago. **Resolver acá el hallazgo `pago_id` sin FK + referencia circular turno↔pago**: FK diferible o columna solo de un lado; validar la existencia del pago al reprogramar (el nuevo turno hereda el `pago`)
+  - `POST /reservas` crea `turno(creado)` + `pago(pendiente, proveedor='simulado')` + `evento_pago(creado)` y devuelve `checkout_url` (pantalla "Checkout simulado" del frontend) + `checkout_token` de 1 uso/vida corta; respeta TTL de pre-reserva `RESERVA_TTL_MIN` (15 min)
+  - Endpoint sandbox `POST /pagos/{pago_id}/simular` (Aprobar / Rechazar / opcional Expirar): existe **solo** con `PAGO_MODO=simulado`, exige `checkout_token`, con rate-limit y token de 1 uso; apagado en producción / modo `mercadopago`. **No integra las 6 rutas públicas de producción (P12)**: excepción documentada, condicionada por flag. El frontend **nunca** confirma: el endpoint le pide al adaptador emitir el evento firmado
+  - `POST /webhooks/mercadopago` (mismo handler en ambos modos): valida firma (`MP_WEBHOOK_SECRET`) → persiste `evento_pago(webhook_recibido)` con payload crudo → idempotencia por `mp_payment_id`/`mp_refund_id` → recién ahí `creado→confirmado` o `creado→cancelado` con actor `sistema` (`aprobado` → `confirmado`; `rechazado`/expirado → `cancelado` + aviso)
+  - Escritura atómica turno+pago+evento antes de invocar al adaptador (nunca cobrar sin rastro local)
+  - Job diario de conciliación contra el estado del proveedor simulado (compara `pago`/`evento_pago` internos); discrepancias → evento `conciliado` + alerta en bandeja. Se reporta como **verificación de consistencia interna**, no contra la API de MP
+  - Marca "(simulado)" en toda respuesta/UI/mail de pago cuando `PAGO_MODO=simulado`; guard de arranque/CI que impida `PAGO_MODO=simulado` o el endpoint sandbox en producción (P15)
+  - Abiertas: Q1 (monto default) → defaults configurables por env/DB, documentados; Q2 (credenciales/titular MP) **diferida** a producción/v2
+  - Tareas de código arrastradas (D14): `backend/app/core/settings.py` suma `PAGO_MODO` (validado `simulado|mercadopago`) y vuelve `MP_ACCESS_TOKEN`/`MP_PUBLIC_KEY` opcionales con validación condicional; `backend/app/tests/test_env_contract.py` se actualiza al nuevo contrato (`PAGO_MODO` default `simulado`, MP_* opcionales, `MP_WEBHOOK_SECRET` requerida en ambos modos, falla si `PAGO_MODO=mercadopago` sin credenciales); `docker-compose.yml`/`.env.example` ya documentan `PAGO_MODO`
+  - Tests: webhook válido/inválido (firma), replay idempotente, expiración pre-reserva, flujo Aprobar/Rechazar/Expirar del sandbox, endpoint sandbox inexistente con `PAGO_MODO=mercadopago`, token de 1 uso, conciliación con discrepancia
 - **Dependencias**: C-05
 - **Governance**: CRITICO
 - **Leer antes**:
-  - `knowledge-base/11_pagos_mercadopago.md` §1–§3 (checkout, webhooks, idempotencia) + §6–§7 (conciliación, audit)
+  - `knowledge-base/11_pagos_mercadopago.md` §0 (modo simulado D14) + §1–§3 (checkout, webhooks, idempotencia) + §6–§7 (conciliación, audit)
   - `knowledge-base/07_flujos_principales.md` F1.3–F1.5 + F5
-  - `knowledge-base/05_reglas_de_negocio.md` §3 RN-SENIA-PAGO
-  - `knowledge-base/04_modelo_de_datos.md` §1.1 (pago separado) + §2 (pago, evento_pago)
-  - `knowledge-base/10_preguntas_abiertas.md` §1.1–1.2 (monto default, credenciales MP)
+  - `knowledge-base/05_reglas_de_negocio.md` §3 RN-SENIA-PAGO + RN-PAGO-SIMULADO
+  - `knowledge-base/04_modelo_de_datos.md` §1.1 (pago separado) + §2 (pago, evento_pago) + §4 (pago↔turno)
+  - `knowledge-base/09_decisiones_y_supuestos.md` D14
+  - `knowledge-base/10_preguntas_abiertas.md` §1.1–1.2 (monto default; Q2 diferida)
 
 ---
 
 ### [C-08] `devoluciones-comprobantes-conciliacion`
 - **Estado**: `[ ]` pendiente
-- **Scope**: Bandeja de devoluciones + recibos internos + trazabilidad navegable (épicas D2–D4, F2)
-  - Modelos: `Devolucion` (`pago_id, turno_id, monto, porcentaje 100|60|0, motivo, estado pendiente|aprobada|rechazada|ejecutada, aprobada_por/at, mp_refund_id`); `Comprobante` separado (D13, `tipo=recibo_interno`, campos ARCA `cae` columnados apagados)
-  - Migración 004: tablas devolucion + comprobante
-  - Cálculo 100/60/0 (RN-SENIA-*) registrado en `devolucion.porcentaje`; ejecución contra API MP con `idempotency_key`, guarda `mp_refund_id`; reintentos consultan antes de re-ejecutar
-  - Bandeja: aprobar/rechazar/ejecutar con actor+fecha+monto (RBAC: odontólogo las de sus turnos, recepcionista todas); `cancelado→devuelto` tras ejecución; recibo interno PDF por pago aprobado y por devolución ejecutada
+- **Scope**: Bandeja de devoluciones **completa** + recibos internos + trazabilidad navegable (épicas D2–D4, F2); en MVP la ejecución la hace el adaptador simulado (D14)
+  - Modelos: `Devolucion` (`pago_id, turno_id, monto, porcentaje 100|60|0, motivo, estado pendiente|aprobada|rechazada|ejecutada, aprobada_por/at, mp_refund_id` sintético `sim_refund_<uuid>` si simulado); `Comprobante` separado (D13, `tipo=recibo_interno`, flag/leyenda `simulado`, campos ARCA `cae` columnados apagados)
+  - Migración **006**: tablas devolucion + comprobante
+  - Cálculo 100/60/0 (RN-SENIA-*) registrado en `devolucion.porcentaje`; ejecución vía el puerto de pagos con `idempotency_key`: el adaptador simulado genera `sim_refund_<uuid>` y registra `evento_pago(devolucion_ejecutada)` **sin mover dinero**; reintentos consultan antes de re-ejecutar
+  - Bandeja: aprobar/rechazar/ejecutar con actor+fecha+monto (RBAC: odontólogo las de sus turnos, recepcionista todas); `cancelado→devuelto` tras ejecución; recibo interno PDF por pago aprobado y por devolución ejecutada con leyenda visible "SIMULADO — sin valor fiscal ni movimiento de dinero"
+  - `aviso_devolucion` (mail, productor real para C-09) con marca "(simulado)" cuando `PAGO_MODO=simulado`, para no prometer devoluciones reales
   - Trazabilidad turno↔pago↔devolución↔comprobante navegable (base para C-11/C-12)
   - Abierta Q4 (60 % auto vs. manual) → default: manual en bandeja, umbral configurable pendiente
-  - Tests: cálculo 100/60/0, idempotencia devolución, permisos bandeja, PDF recibo
+  - Tests: cálculo 100/60/0, idempotencia devolución, permisos bandeja, PDF recibo con leyenda, marca "(simulado)" en mail
 - **Dependencias**: C-07
 - **Governance**: CRITICO
 - **Leer antes**:
-  - `knowledge-base/11_pagos_mercadopago.md` §4–§5 (bandeja, comprobantes)
+  - `knowledge-base/11_pagos_mercadopago.md` §0 (modo simulado D14) + §4–§5 (bandeja, comprobantes)
   - `knowledge-base/07_flujos_principales.md` F2 (cancelación con devolución)
-  - `knowledge-base/05_reglas_de_negocio.md` §3 RN-SENIA-100/60/0, RN-BANDEJA, RN-COMPROBANTE
+  - `knowledge-base/05_reglas_de_negocio.md` §3 RN-SENIA-100/60/0, RN-BANDEJA, RN-COMPROBANTE, RN-PAGO-SIMULADO
   - `knowledge-base/04_modelo_de_datos.md` §2 (devolucion, comprobante)
   - `knowledge-base/10_preguntas_abiertas.md` §1.4 (umbral auto/manual)
 
@@ -304,9 +313,9 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ### [C-09] `mails-recordatorios`
 - **Estado**: `[x]` completado
 - **Scope**: Subsistema de notificaciones mail-only v1 (épica E completa en núcleo; productor de confirmación C-07 y productor de aviso de devolución C-08 pendiente de integración).
-  - Modelo `RecordatorioMail` (`turno_id, tipo, destinatario, plantilla_version, estado encolado|enviado|reintentando|fallido|confirmado_desde_mail|cancelado_desde_mail, intentos, token_accion` hash único con expiración) + **migración 004** (head real `003`; cuando se implementen C-07/C-08 se renumeran a 005/006).
+  - Modelo `RecordatorioMail` (`turno_id, tipo, destinatario, plantilla_version, estado encolado|enviado|reintentando|fallido|confirmado_desde_mail|cancelado_desde_mail, intentos, token_accion` hash único con expiración) + **migración 004** (`004_recordatorio_mail`, head actual; C-07 → 005 y C-08 → 006).
   - Workers Redis separados del request path: colas, reintentos backoff 3 intentos, scheduler de ventana configurable `RECORDATORIO_VENTANA_HS`.
-  - Mails: confirmación al reservar/al confirmar (A3, enganchada en `transition()` `creado→confirmado` actor `sistema` para C-07), recordatorio en ventana (E1), aviso de devolución con cotización seña (F2 sin reembolso real hasta C-08); plantillas versionadas.
+  - Mails: confirmación al reservar/al confirmar (A3, enganchada en `transition()` `creado→confirmado` actor `sistema` para C-07), recordatorio en ventana (E1), aviso de devolución con cotización seña (F2 sin ejecución de devolución hasta C-08; con marca "(simulado)" cuando `PAGO_MODO=simulado`, D14); plantillas versionadas.
   - `GET /api/mail/confirmar?token=` / `/api/mail/cancelar?token=` — tokens firmados un solo uso, vida corta, hash en DB y consumo en DB; cancelar deriva a F2 mostrando regla de seña (E2).
   - Config entregabilidad: `MAIL_FROM` alineado, docs SPF/DKIM/DMARC del dominio, métricas de entrega visibles (E3); fallo sin reintento infinito.
   - Puerto/adaptador de notificaciones: WhatsApp **[v2]** conector apagado; `mail:pendientes` lista para C-07/C-08.
@@ -329,18 +338,19 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ### [C-10] `frontend-reserva-publica`
 - **Estado**: `[ ]` pendiente
 - **Scope**: SPA pública de reserva 3–4 pasos + páginas de acción por mail + precios públicos (épica A cara visible, D11)
-  - Flujo canónico: datos (DNI con reconocimiento/precarga) → profesional → fecha/hora (slots de `GET /disponibilidad`) → confirmación viendo monto turno + seña (A4) → checkout MP → confirmación inmediata
+  - Flujo canónico: datos (DNI con reconocimiento/precarga) → profesional → fecha/hora (slots de `GET /disponibilidad`) → confirmación viendo monto turno + seña (A4) → pantalla "Checkout simulado" (D14: Aprobar/Rechazar/Expirar vía `POST /pagos/{pago_id}/simular` con `checkout_token`; el frontend nunca confirma; checkout MP real = v2/producción) → confirmación inmediata, con banner "(simulado)"
   - Páginas `/mail/confirmar`, `/mail/cancelar`, `/mis-turnos` (token, nunca DNI solo) con estados de error amigables
   - Endpoints públicos de precio/trial (D11, `03 §3.6`); cancelación/reprogramación propia con reglas de seña visibles pre-confirmación (B1–B2)
   - Manejo de slot expirado/pago fallido sin bloquear al usuario (A5); sin datos de otros pacientes en ningún render
-  - Tests E2E: reserva feliz, DNI reconocido, pago rechazado libera slot, cancelar desde mail
+  - Tests E2E: reserva feliz (checkout simulado aprobado), DNI reconocido, pago rechazado/expirado en checkout simulado libera slot, cancelar desde mail
 - **Dependencias**: C-05, C-07
 - **Governance**: BAJO
 - **Leer antes**:
   - `knowledge-base/06_funcionalidades.md` §Épicas A, B
   - `knowledge-base/07_flujos_principales.md` F1 + F4.3
   - `knowledge-base/03_actores_y_roles.md` §1 R1 + §3 (rutas públicas)
-  - `knowledge-base/09_decisiones_y_supuestos.md` D11 (precio/trial públicos)
+  - `knowledge-base/09_decisiones_y_supuestos.md` D11 (precio/trial públicos) + D14 (pagos simulados)
+  - `knowledge-base/11_pagos_mercadopago.md` §0 (flujo simulado, pantalla de checkout)
 
 ---
 
@@ -350,8 +360,8 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
   - Agenda del día aislada por profesional (odontólogo: solo la suya; recepcionista: todas, solo lectura salvo acciones permitidas)
   - ABM disponibilidad/bloqueos por odontólogo, marcar `atendido/no_show`, cancelar/reprogramar con motivo + historial visible actor+fecha (B3)
   - Reserva por teléfono a nombre del paciente (recepcionista, Q10: flujo exacto con datos mínimos DNI+mail)
-  - Bandeja de devoluciones: aprobar/rechazar/ejecutar con trazabilidad turno↔pago↔devolución↔comprobante navegable; fichas de paciente (contacto + historial acotado)
-  - Prohibiciones recepcionista enforced también en UI (no usuarios/roles, no config MP, no ARCA) — el backend ya las niega desde C-03
+  - Bandeja de devoluciones (con banner "(simulado)" cuando `PAGO_MODO=simulado`): aprobar/rechazar/ejecutar con trazabilidad turno↔pago↔devolución↔comprobante navegable; fichas de paciente (contacto + historial acotado)
+  - Prohibiciones recepcionista enforced también en UI (no usuarios/roles, no config de pagos/MP/`PAGO_MODO`, no ARCA) — el backend ya las niega desde C-03
   - Tests E2E por rol: aislamiento de agenda, permisos bandeja, prohibiciones
 - **Dependencias**: C-05, C-08
 - **Governance**: MEDIO
@@ -368,7 +378,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ### [C-12] `reportes-exportaciones`
 - **Estado**: `[ ]` pendiente
 - **Scope**: Reportes mínimos de asistencia + exportación CSV/PDF de turnos y caja (épicas F2–F3, RN-AUDIT)
-  - Endpoints: conteos por estado y período (asistencia/ausentismo), caja (pagos/devoluciones conciliadas), solo roles autorizados (RBAC `03 §2`)
+  - Endpoints: conteos por estado y período (asistencia/ausentismo), caja (pagos/devoluciones conciliadas; banner "(simulado)" en MVP, D14), solo roles autorizados (RBAC `03 §2`)
   - Exportación CSV/PDF de turnos y caja con filtros por odontólogo/período; auditoría exportable (D3: diferencial barato)
   - Métricas de entrega de mail visibles para el consultorio (base de C-09); métrica propia de ausentismo **excluida** (solo v2+ académico, D12/Q8)
   - UI mínima en `frontend/src/pages/reportes` con descarga y vista de conteos
@@ -379,7 +389,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
   - `knowledge-base/06_funcionalidades.md` §Épica F F2–F4
   - `knowledge-base/05_reglas_de_negocio.md` §6 RN-AUDIT
   - `knowledge-base/09_decisiones_y_supuestos.md` D3, D12 (auditoría diferencial, ausentismo v2+)
-  - `knowledge-base/11_pagos_mercadopago.md` §6–§7 (conciliación, trazabilidad para caja)
+  - `knowledge-base/11_pagos_mercadopago.md` §0 + §6–§7 (conciliación interna en MVP, trazabilidad para caja)
 
 ---
 
@@ -387,9 +397,9 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 - **Estado**: `[ ]` pendiente
 - **Scope**: Endurecimiento v1 + cumplimiento mínimo explícito + verificación de recorte (criterios de éxito `01 §5`)
   - TLS en tránsito + cifrado declarado de sensibles en reposo; backups periódicos PostgreSQL con prueba de restore; job de retención RN-RETENCION con política publicada
-  - Rate-limit auditado en todas las rutas públicas `03 §3`; verificación de flags v2 apagados (`WHATSAPP_ENABLED=false`, `ARCA_ENABLED=false`, `lista_espera` sin escrituras, sin sobre-turnos RN-SOBRETURNO)
+  - Rate-limit auditado en todas las rutas públicas `03 §3`; verificación de flags v2 apagados (`WHATSAPP_ENABLED=false`, `ARCA_ENABLED=false`, `PAGO_MODO=mercadopago` no construido/apagado en el MVP, endpoint sandbox `/pagos/{pago_id}/simular` inexistente fuera de `PAGO_MODO=simulado` y modo simulado nunca habilitado en producción (P15), `lista_espera` sin escrituras, sin sobre-turnos RN-SOBRETURNO)
   - Seed final completo `04 §5` (10 turnos todos los estados, 1 pago aprobado + 1 devolución 60 % ejecutada) + datos demo precio/trial públicos
-  - Verificación E2E de los 5 criterios de éxito v1 (reserva→seña→mail sin intervención; no doble-reserva concurrente; rastro auditable total; confirmar/cancelar desde mail; recorte sostenido)
+  - Verificación E2E de los 5 criterios de éxito v1 (reserva→seña simulada→mail sin intervención; no doble-reserva concurrente; rastro auditable total; confirmar/cancelar desde mail; recorte sostenido)
   - Riesgos Q11/Q12 documentados como limitaciones conocidas (sin validación usuarios reales, sin dictamen legal Ley 25.326/26.529)
   - Tests: restore backup, retención, flags v2 off, checklist criterios de éxito
 - **Dependencias**: C-09, C-11, C-12
@@ -413,7 +423,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 | C-05 | reserva-turnos-estados | 2 Turnos | CRITICO | C-04 |
 | C-06 | ficha-paciente-consentimiento | 2 Turnos | MEDIO | C-03 |
 | C-07F | frontend-interfaz-agenda | 2.5 Frontend acotado | MEDIO | C-03, C-05, C-06 |
-| C-07 | pagos-mp-checkout-webhook | 3 Pagos | CRITICO | C-05 |
+| C-07 | pagos-mp-checkout-webhook (pagos simulados, D14) | 3 Pagos | CRITICO | C-05 |
 | C-08 | devoluciones-comprobantes-conciliacion | 3 Pagos | CRITICO | C-07 |
 | C-09 | mails-recordatorios | 4 Notif | ALTO | C-05, C-07 |
 | C-10 | frontend-reserva-publica | 5 Frontend | BAJO | C-05, C-07 |

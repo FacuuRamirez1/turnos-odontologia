@@ -54,7 +54,10 @@ services:
       DATABASE_URL: postgresql+psycopg://turnos:turnos@db:5432/turnos
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-cambiar-en-produccion-dev}
+      # D14: pagos simulados en MVP. MP_* son opcionales (solo con PAGO_MODO=mercadopago). NUNCA simulado en producción (P15).
+      PAGO_MODO: ${PAGO_MODO:-simulado}
       MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-TEST-ficticio}
+      MP_PUBLIC_KEY: ${MP_PUBLIC_KEY:-TEST-ficticio-public}
       MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-cambiar-en-produccion-dev}
       SMTP_HOST: mailhog
       SMTP_PORT: 1025

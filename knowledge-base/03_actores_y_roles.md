@@ -29,7 +29,7 @@ Permisos **explícitos y cerrados** (lista exhaustiva para v1):
 5. Consultar reportes mínimos y exportaciones CSV/PDF **[v1]**.
 6. Ver fichas mínimas de pacientes (contacto + historial de turnos) **[v1]**.
 
-**Prohibido explícitamente para recepcionista [v1]**: administrar usuarios/roles; modificar configuración de pagos (credenciales MP, webhooks); borrar audit trail; ver/emitir comprobantes ARCA **[v2]**.
+**Prohibido explícitamente para recepcionista [v1]**: administrar usuarios/roles; modificar configuración de pagos (credenciales MP, webhooks, `PAGO_MODO`); borrar audit trail; ver/emitir comprobantes ARCA **[v2]**.
 
 ## 2. Tabla RBAC (matriz exigible en backend, no solo UI)
 
@@ -50,10 +50,12 @@ Permisos **explícitos y cerrados** (lista exhaustiva para v1):
 ## 3. Rutas públicas (sin JWT) — lista cerrada [v1]
 
 1. `GET /disponibilidad?...` — slots ofrecibles por odontólogo/fecha (solo huecos libres, sin datos de otros pacientes).
-2. `POST /reservas` — crear reserva (datos paciente + DNI + slot + pago MP). Rate-limit: sí.
-3. `POST /webhooks/mercadopago` — webhook MP (firma + idempotencia, ver `11_pagos_mercadopago.md`).
+2. `POST /reservas` — crear reserva (datos paciente + DNI + slot + pago; en MVP devuelve `checkout_url` + `checkout_token` del checkout simulado). Rate-limit: sí.
+3. `POST /webhooks/mercadopago` — webhook de pagos (firma + idempotencia, ver `11_pagos_mercadopago.md`); en modo simulado lo invoca internamente el adaptador.
 4. `GET /mail/confirmar?token=…` / `GET /mail/cancelar?token=…` — acciones desde el mail (token firmado, un uso, expiración corta).
 5. `GET /mis-turnos?dni=…&token=…` — consulta acotada de turnos propios (token enviado al mail, no DNI solo).
 6. Endpoints de precio/trial públicos (precio y trial públicos desde día uno, decisión confirmada).
+
+> **Excepción sandbox (D14)**: con `PAGO_MODO=simulado` existe además `POST /pagos/{pago_id}/simular` (requiere `checkout_token` de 1 uso y vida corta, con rate-limit). **No cuenta entre las 6 rutas públicas de producción**: es una excepción documentada, condicionada por flag, y debe estar apagada en producción / `PAGO_MODO=mercadopago`.
 
 Todo lo demás exige JWT con `role` + `odontologo_id` (aislamiento de agenda forzado en queries, ver `08_arquitectura_propuesta.md`).

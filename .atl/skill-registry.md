@@ -15,7 +15,7 @@ Scope note (project decision): skills live at PROJECT level, not global. Canonic
 | Implementing auth systems, securing APIs, OAuth2/social login, RBAC, sessions, SSO, debugging auth | auth-implementation-patterns | .agents/skills/auth-implementation-patterns/SKILL.md |
 | Designing Redis data model, caching objects/sessions, counters, leaderboards, membership sets, key naming review | redis-core | .agents/skills/redis-core/SKILL.md |
 | Building new UI or reshaping existing one; aesthetic direction, typography, non-templated visual design | frontend-design | .agents/skills/frontend-design/SKILL.md |
-| Integrating Stripe payments, subscriptions, secure checkout, refunds, webhooks (analog for MercadoPago webhook/idempotency — no MP-specific skill exists) | stripe-integration | .agents/skills/stripe-integration/SKILL.md |
+| Integrating Stripe payments, subscriptions, secure checkout, refunds, webhooks (analog for payment webhook/idempotency — MVP uses a simulated provider (D14); no MP-specific skill exists) | stripe-integration | .agents/skills/stripe-integration/SKILL.md |
 | Building EMR/EHR features: encounter workflows, prescriptions, clinical data entry UI, CDSS | healthcare-emr-patterns | .agents/skills/healthcare-emr-patterns/SKILL.md |
 | "openspec apply / opsx apply / openspec implement" — implement tasks from an OpenSpec change | openspec-apply-change | .agents/skills/openspec-apply-change/SKILL.md (dup: .opencode/skills/openspec-apply-change/SKILL.md) |
 | "openspec archive / opsx archive" — finalize and archive a completed change | openspec-archive-change | .agents/skills/openspec-archive-change/SKILL.md (dup: .opencode/skills/openspec-archive-change/SKILL.md) |
@@ -80,7 +80,7 @@ Pre-digested rules per skill. Delegators copy matching blocks into sub-agent pro
 - Choose type by ACCESS pattern: String (counters/INCR), Hash (objects with independent field updates), List (queues/recent-N), Set (membership), Sorted Set (rankings), JSON (nested docs), Stream (event log/consumer groups), Vector Set (similarity).
 - Never serialize a flat object into a String for field-level updates (fetch+parse+mutate+rewrite anti-pattern) — use Hash.
 - Keys: lowercase colon-separated `{entity}:{id}:{attribute}` (e.g. `turno:123:estado`); short but readable; no URLs/long strings as keys (hash digest instead); tenant prefix for multi-tenancy (`tenant:42:...`); one convention per service.
-- Project uses: mail reminder queues/retries, MercadoPago webhook idempotency keys, session/short-TTL state.
+- Project uses: mail reminder queues/retries, payment webhook idempotency keys (simulated provider in MVP, MercadoPago in production), session/short-TTL state.
 - Full rationale + Python examples in `references/choose-data-structure.md`; naming cleanup cases in `references/key-naming.md`.
 
 ### frontend-design
@@ -96,7 +96,7 @@ Pre-digested rules per skill. Delegators copy matching blocks into sub-agent pro
 - Webhooks are source of truth: handle `payment_intent.succeeded/failed`, `subscription.updated/deleted`, `charge.refunded`, `invoice.payment_succeeded`; always verify signatures; idempotent handlers (dedupe by event id).
 - Model: Product → Price → Subscription → Invoice per cycle; customer records own methods/metadata/billing details.
 - SCA/3DS: test cards `4242…` success / `4000000000000002` decline / `4000002500003155` 3DS / `4000000000009995` insufficient; use `sk_test_*` in tests.
-- Project mapping: NO MercadoPago skill exists — reuse this skill's webhook/idempotency/checkout-state-machine patterns for seña/devoluciones (C-07/C-08); amounts/currency/MP SDK differ.
+- Project mapping: NO MercadoPago skill exists — reuse this skill's webhook/idempotency/checkout-state-machine patterns for seña/devoluciones (C-07/C-08). D14: the MVP uses a SIMULATED provider (`PAGO_MODO=simulado`, signed HMAC events into the same webhook handler); amounts/currency/MP SDK differ and real MP is v2/production.
 - Worked patterns in `references/details.md`; never expose secret keys client-side; confirm payment status server-side before mutating turno state.
 
 ### healthcare-emr-patterns
@@ -157,7 +157,7 @@ Pre-digested rules per skill. Delegators copy matching blocks into sub-agent pro
 | KB arquitectura | knowledge-base/08_arquitectura_propuesta.md | FastAPI + React + PostgreSQL + Redis + Docker |
 | KB decisiones | knowledge-base/09_decisiones_y_supuestos.md | D1/D2 cuts, stack calls |
 | KB abiertas | knowledge-base/10_preguntas_abiertas.md | Open questions |
-| KB pagos | knowledge-base/11_pagos_mercadopago.md | MercadoPago seña/devoluciones spec |
+| KB pagos | knowledge-base/11_pagos_mercadopago.md | Pagos spec: modo simulado MVP (D14) + MercadoPago target seña/devoluciones |
 | OpenSpec root | openspec/ | specs + changes + archive live here |
 
 > NOTE — conventions pending re-index: `CLAUDE.md` / `AGENTS.md` do NOT exist yet (generated later by agent-instruction). Re-run this registry after that step to index hard rules + referenced paths. No `agents.md`, `.cursorrules`, `GEMINI.md`, or `copilot-instructions.md` found at project root.
@@ -168,6 +168,6 @@ Read the convention files listed above for project-specific patterns and rules. 
 
 - Canonical skill source: `.agents/skills/` (15 dirs). `.opencode/skills/` duplicates the 6 openspec-* skills — delegators must use the `.agents/skills/` path.
 - `.claude/skills/` is empty; no global directories were scanned (project decision).
-- Gap (known): no MercadoPago-specific skill; `stripe-integration` is the webhook/idempotency analog for C-07/C-08.
+- Gap (known): no MercadoPago-specific skill; `stripe-integration` is the webhook/idempotency analog for C-07/C-08 (simulated provider in MVP, D14).
 - Gap (known): no docker-compose skill installed at registry time; `CHANGES.md`/KB assume Docker parity — revisit if a docker skill is added.
 - `state.skills.installed` lists the 9 coding skills; all 9 verified present in `.agents/skills/` + 6 openspec-* workflow skills = 15 total.

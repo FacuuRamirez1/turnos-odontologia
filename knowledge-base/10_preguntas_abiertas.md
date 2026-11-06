@@ -6,7 +6,7 @@ Todo lo aquí listado **no bloquea v1** salvo marca explícita. Prefijo **[DISCO
 ## 1. Pagos (bloquean detalle de Épica D)
 
 1. Monto fijo de la seña pendiente de definición (proveedor MP ya sugerido; montos configurables por odontólogo ya decididos). ¿Monto inicial sugerido por defecto?
-2. Cerrar proveedor MercadoPago: ¿credenciales de prueba vs. producción, quién es titular de la cuenta, cómo se concilia?
+2. **[Diferida a la salida a producción/v2 — D14]** Cerrar proveedor MercadoPago: ¿credenciales de prueba vs. producción, quién es titular de la cuenta, cómo se concilia? En el MVP rige el proveedor simulado (`PAGO_MODO=simulado`) y no se necesitan credenciales.
 3. Reprogramación con diferencia de monto (turno más caro/barato): ¿se cobra/paga diferencia o se mantiene seña original?
 4. ¿Devolución del 60 % automática o con aprobación manual en bandeja? (propuesta: automática si < umbral, manual si ≥ umbral — umbral a definir).
 

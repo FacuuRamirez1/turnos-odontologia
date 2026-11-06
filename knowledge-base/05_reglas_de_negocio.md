@@ -21,12 +21,13 @@ Código: **RN-XX**. Todas **[v1]** salvo marca explícita.
 
 ## 3. Seña y devoluciones (decisión cerrada)
 
-- **RN-SENIA-PAGO [v1]**: la seña se paga al reservar vía MercadoPago (proveedor sugerido v1). Monto del turno y de la seña configurables por odontólogo. Sin pago aprobado, la reserva no queda confirmada (ver flujo en `07_flujos_principales.md`).
+- **RN-SENIA-PAGO [v1]**: la seña se paga al reservar vía el proveedor de pagos (MVP: **simulado**, sin movimiento de dinero; MercadoPago real en v2/producción, D14). Monto del turno y de la seña configurables por odontólogo. Sin pago aprobado, la reserva no queda confirmada (ver flujo en `07_flujos_principales.md`).
 - **RN-SENIA-100 [v1]**: cancela en término (dentro de anticipación) → devolución del 100 %.
 - **RN-SENIA-60 [v1]**: cancela fuera de término → devolución del 60 %.
 - **RN-SENIA-0 [v1]**: no-show → 0 % devolución.
-- **RN-BANDEJA [v1]**: toda devolución pasa por la bandeja con comprobante y trazabilidad (quién aprobó, cuándo, qué monto). Idempotencia en cobros y devoluciones (auditoría máxima día 1).
-- **RN-COMPROBANTE [v1/v2]**: en v1 se emite recibo interno; el comprobante vive separado del turno para que ARCA **[v2]** no exija refactorización.
+- **RN-BANDEJA [v1]**: toda devolución pasa por la bandeja con comprobante y trazabilidad (quién aprobó, cuándo, qué monto). Idempotencia en cobros y devoluciones (auditoría máxima día 1). En modo simulado la ejecución de la devolución la hace el adaptador simulado (`sim_refund_<uuid>`, sin mover dinero) y la bandeja/UI muestran la marca "(simulado)".
+- **RN-COMPROBANTE [v1/v2]**: en v1 se emite recibo interno; el comprobante vive separado del turno para que ARCA **[v2]** no exija refactorización. En modo simulado el PDF lleva la leyenda visible "SIMULADO — sin valor fiscal ni movimiento de dinero".
+- **RN-PAGO-SIMULADO [v1]** (D14): con `PAGO_MODO=simulado` (default MVP) el proveedor es un adaptador que firma con HMAC (`MP_WEBHOOK_SECRET`) y entrega el evento al mismo handler `POST /webhooks/mercadopago`; el frontend nunca confirma, solo pide `POST /pagos/{pago_id}/simular` con `checkout_token` de 1 uso; ids sintéticos `sim_pay_*`/`sim_refund_*`; se respeta el TTL de pre-reserva; toda UI, comprobante y mail de pago/devolución muestra "(simulado)". El modo simulado y el endpoint sandbox están **prohibidos en producción** (P15).
 
 ## 4. Máquina de estados del turno [v1]
 
@@ -38,7 +39,7 @@ creado → confirmado → atendido
 ```
 
 - **RN-ESTADOS [v1]**: cada transición guarda **actor + fecha** en `turno_historial` (constraints de dominio: trigger/check que rechaza transiciones sin actor).
-- Transiciones permitidas (origen → destino, actor): creado→confirmado (sistema/MP webhook); confirmado→cancelado (paciente/odontólogo/recepcionista); confirmado→reprogramado (idem, exige nuevo slot libre en el mismo acto); confirmado→atendido (odontólogo/recepcionista); confirmado→no_show (odontólogo/recepcionista, posterior a `fin`); cancelado→devuelto (sistema tras devolución ejecutada).
+- Transiciones permitidas (origen → destino, actor): creado→confirmado (sistema/webhook de pagos, también en modo simulado); confirmado→cancelado (paciente/odontólogo/recepcionista); confirmado→reprogramado (idem, exige nuevo slot libre en el mismo acto); confirmado→atendido (odontólogo/recepcionista); confirmado→no_show (odontólogo/recepcionista, posterior a `fin`); cancelado→devuelto (sistema tras devolución ejecutada).
 - **RN-SOBRETURNO [v2]**: sin sobre-turnos en v1 (recorte consciente). **RN-ESPERA [v2]**: lista de espera modelada, apagada.
 
 ## 5. Recordatorios [v1]

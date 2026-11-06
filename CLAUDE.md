@@ -16,7 +16,7 @@
 | Async/colas | Redis (mails, reintentos, ventana de recordatorios, idempotencia) |
 | Infra | Docker / Docker Compose |
 | Frontend | React + TypeScript estricto + Vite (componentes en PascalCase, prohibido `any`) |
-| Pagos [v1] | MercadoPago (checkout + webhooks + devoluciones; solo server-to-server) |
+| Pagos [v1] | Pagos simulados en MVP (adaptador `simulado`, `PAGO_MODO=simulado`, D14); MercadoPago real = v2/producción (checkout + webhooks + devoluciones; solo server-to-server) |
 | Mail [v1] | SMTP con SPF/DKIM/DMARC, solo desde `MAIL_FROM` alineado, vía workers Redis |
 
 Detalle completo: [knowledge-base/02_descripcion_general.md](knowledge-base/02_descripcion_general.md)
@@ -50,7 +50,7 @@ La fuente de verdad del dominio vive en `knowledge-base/`. **Leé el archivo rel
 | Agente | Rol | Skills que carga |
 |--------|-----|------------------|
 | **Backend Core** | FastAPI, modelos, reglas de dominio | `python-fastapi-development`, `supabase-postgres-best-practices`, `tdd` |
-| **Backend Aux** | Auth, pagos, colas, ficha clínica | `auth-implementation-patterns`, `stripe-integration` (análogo webhooks/idempotencia MP), `redis-core`, `healthcare-emr-patterns` |
+| **Backend Aux** | Auth, pagos, colas, ficha clínica | `auth-implementation-patterns`, `stripe-integration` (análogo para idempotencia/webhooks de pagos, MP real y simulado), `redis-core`, `healthcare-emr-patterns` |
 | **Frontend** | Reserva 3-4 pasos, agenda, UX | `vercel-react-best-practices`, `frontend-design` |
 | **Orquestación** | OPSX propone/aplica/archiva | `openspec-propose`, `openspec-explore`, `openspec-apply-change`, `openspec-archive-change`, `openspec-sync-specs`, `openspec-update-change` |
 
@@ -91,11 +91,12 @@ Específicas del proyecto (contrato; romperlas es un defecto):
 - **P7.** Commits convencionales (`feat(C-01): ...`, `docs(...)`, `chore(...)`), sin co-autoría de IA, **cada integrante con commits propios** (trazabilidad).
 - **P8.** NUNCA permiso solo en UI → RBAC exigible en backend con `require_role()` + `odontologo_id` forzado en repositorio; recepcionista: 6 permisos sí / 4 prohibiciones no.
 - **P9.** NUNCA transición sin actor+fecha → máquina cerrada creado→confirmado→atendido/cancelado/reprogramado/no_show→devuelto; `turno_historial`/`evento_pago` append-only, revoke UPDATE/DELETE.
-- **P10.** NUNCA confirmar pagos por frontend → solo `POST /webhooks/mercadopago` server-to-server, valida firma `MP_WEBHOOK_SECRET`, persiste `webhook_recibido` con payload crudo, idempotencia por `mp_payment_id` / `mp_refund_id`.
+- **P10.** NUNCA confirmar pagos por frontend → solo el handler `POST /webhooks/mercadopago` (server-to-server) confirma: valida firma `MP_WEBHOOK_SECRET`, persiste `webhook_recibido` con payload crudo, idempotencia por `mp_payment_id` / `mp_refund_id`. En `PAGO_MODO=simulado` el evento lo emite internamente el adaptador simulado (firmado) por solicitud del endpoint sandbox con `checkout_token`; el frontend jamás cambia estados de pago/turno.
 - **P11.** NUNCA dato real de paciente + NUNCA ficha sin consentimiento → solo DNI ficticios; RN-CONSENTIMIENTO bloqueante.
-- **P12.** NUNCA ruta pública fuera de lista → solo las 6 de 03 §3, todas con rate-limit; `GET /mis-turnos` exige token, nunca DNI solo; tokens de mail de 1 uso y vida corta.
-- **P13.** NUNCA v2 encendido en v1 → `WHATSAPP_ENABLED=false`, `ARCA_ENABLED=false`, lista de espera sin escrituras, sin sobre-turnos, single-sede.
+- **P12.** NUNCA ruta pública fuera de lista → solo las 6 de 03 §3, todas con rate-limit; `GET /mis-turnos` exige token, nunca DNI solo; tokens de mail de 1 uso y vida corta. Excepción documentada (D14): `POST /pagos/{pago_id}/simular` solo existe con `PAGO_MODO=simulado`, exige `checkout_token` de 1 uso, con rate-limit; no cuenta entre las 6 de producción.
+- **P13.** NUNCA v2 encendido en v1 → `WHATSAPP_ENABLED=false`, `ARCA_ENABLED=false`, lista de espera sin escrituras, sin sobre-turnos, single-sede; `PAGO_MODO=mercadopago` queda apagado/no construido en el MVP.
 - **P14.** NUNCA fuera de contrato OPSX → leer `CHANGES.md` antes de `/opsx:propose`; en Apply no inventar lo no aprobado en Propose; mail solo desde `MAIL_FROM` alineado vía workers Redis.
+- **P15.** NUNCA modo simulado en producción → `PAGO_MODO=simulado` y el endpoint sandbox `/pagos/{pago_id}/simular` prohibidos fuera de dev/MVP; en producción solo `PAGO_MODO=mercadopago` (v2) con guard de arranque que falle si no se cumple; toda UI/comprobante/mail de pago simulado lleva la marca "(simulado)".
 
 ---
 

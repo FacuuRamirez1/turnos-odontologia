@@ -19,7 +19,7 @@ El relevamiento de mercado confirma el hueco: el mercado empuja soluciones multi
 | Odontólogo | Cargar su disponibilidad (duración, tope/día, pausas, feriados, bloqueos) | [v1] |
 | Odontólogo | Gestionar cancelaciones/reprogramaciones con historial de estados (actor + fecha) | [v1] |
 | Recepcionista/Admin (opcional) | Operar agendas del consultorio, cancelaciones y bandeja de devoluciones con permisos explícitos | [v1] |
-| Consultorio | Cobrar seña al reservar vía MercadoPago con trazabilidad y comprobantes | [v1] |
+| Consultorio | Cobrar seña al reservar con trazabilidad y comprobantes (MVP: proveedor simulado; MercadoPago real en v2/producción, D14) | [v1] |
 | Consultorio | Reducir ausentismo con recordatorios por mail de alta entregabilidad | [v1] |
 | Consultorio | Exportar turnos y caja (CSV/PDF) y ver reportes mínimos de asistencia | [v1] |
 | Consultorio | Facturar con ARCA / gestionar obras sociales | [v2] post-v1 |
@@ -31,7 +31,7 @@ El relevamiento de mercado confirma el hueco: el mercado empuja soluciones multi
 - Reserva online flujo canónico 3–4 pasos (datos → profesional → fecha/hora → confirmación) con reconocimiento por DNI y confirmación inmediata por mail **[v1]**.
 - Agenda del día por odontólogo con aislamiento por profesional y constraints de dominio anti-choque **[v1]**.
 - Cancelación/reprogramación (paciente y odontólogo/admin) con liberación automática del hueco **[v1]**.
-- Seña real vía MercadoPago (proveedor sugerido v1): monto del turno y de la seña configurables por odontólogo; se paga al reservar; devolución 100 % en término / 60 % fuera de término / 0 % no-show; bandeja de devoluciones con comprobante y trazabilidad **[v1]**.
+- Seña vía proveedor de pagos detrás de un adaptador (MVP: **simulado**, sin movimiento de dinero; MercadoPago real = v2/producción, ver D14 en `09_decisiones_y_supuestos.md`): monto del turno y de la seña configurables por odontólogo; se paga al reservar; devolución 100 % en término / 60 % fuera de término / 0 % no-show; bandeja de devoluciones con comprobante y trazabilidad **[v1]**.
 - Recordatorios automáticos **por mail** (única vía v1): SPF/DKIM/DMARC, colas/reintentos con Redis, plantillas versionadas, ventana configurable, confirmar/cancelar desde el propio mail **[v1]**.
 - Historial de estados por turno (actor + fecha), auditoría máxima día 1: idempotencia en cobros/devoluciones, exportación CSV/PDF, audit trail append-only de eventos de pago **[v1]**.
 - Ficha de paciente mínima + historial de turnos acotado (nada clínico) **[v1]**.

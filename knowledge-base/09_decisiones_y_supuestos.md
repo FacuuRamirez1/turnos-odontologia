@@ -7,11 +7,11 @@ Relacionadas: todos los archivos de la KB. Lo **No evidenciado** se marca como t
 
 | # | Decisión | Fundamento (mercado) |
 |---|---|---|
-| D1 | v1 completo junto: reserva + agenda + seña real MP + mail (P2=b) | El diferencial es la unión de los cuatro en un flujo; por oleadas se pierde la propuesta de valor. Riesgo asumido: scope exigente para el cuatrimestre (ver `discovery.md` §10) |
+| D1 | v1 completo junto: reserva + agenda + seña (simulada en MVP, ver D14) + mail (P2=b) | El diferencial es la unión de los cuatro en un flujo; por oleadas se pierde la propuesta de valor. Riesgo asumido: scope exigente para el cuatrimestre (ver `discovery.md` §10) |
 | D2 | Velocidad con sesgo a entrega sin romper trazabilidad de pagos (P5=c) | Recortar UX/clínica, jamás idempotencia ni audit trail |
 | D3 | Auditoría máxima día 1: historial estados + idempotencia cobros/devoluciones + CSV/PDF + audit trail append-only (P-fin=c) | Ningún relevado ofrece auditoría global exportable (DentalSoft: parcial; resto: **No evidenciado**); es diferencial barato |
 | D4 | Enfoque B: todo documentado con etiquetas v1/v2 | Evita scope creep manteniendo el diseño futuro visible |
-| D5 | MercadoPago proveedor sugerido v1; montos turno/seña configurables por odontólogo | MP es el medio común: caja con MP en DentalSoft, cobro al reservar en MedicAI, anticipado en Gendu (declaraciones de esos proveedores). Monto fijo pendiente → `10_preguntas_abiertas.md` |
+| D5 | MercadoPago proveedor sugerido v1 (en MVP queda detrás del adaptador, ver D14); montos turno/seña configurables por odontólogo | MP es el medio común: caja con MP en DentalSoft, cobro al reservar en MedicAI, anticipado en Gendu (declaraciones de esos proveedores). Monto fijo pendiente → `10_preguntas_abiertas.md` |
 | D6 | Devolución 100 % en término / 60 % fuera / 0 % no-show; se paga al reservar | Política propia; **No evidenciado** que alguien la implemente así (vacío detectado en C.3 del análisis) |
 | D7 | Mail-only en v1; WhatsApp conector modelado apagado v2 | Recorte consciente: el mercado da WhatsApp por sentado pero tiene costo por mensaje (DentalSoft declara 0,026 USD/msg de Meta) y el mail bien hecho es vacío (C.3.3) |
 | D8 | Single-sede con aislamiento por odontólogo; multi-sede v2+ | Ataca al consultorio chico desatendido (C.3.6); el mercado empuja enterprise |
@@ -20,11 +20,13 @@ Relacionadas: todos los archivos de la KB. Lo **No evidenciado** se marca como t
 | D11 | Precio y trial públicos desde día uno (confirmada) | El mercado premia precio público y trial sin tarjeta y penaliza cotización opaca (C.1.6) |
 | D12 | Métrica de ausentismo solo si sale del ámbito académico | Claims tipo "−65 %" son afirmación comercial sin metodología: **No evidenciado** |
 | D13 | Pago y comprobante como entidades separadas del turno | Puente ARCA/MP (C.4); referencia patrón ARCA-API/TusFacturasAPP |
+| D14 | (2026-11-05) MVP con **proveedor de pagos simulado** (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; MercadoPago real (`PAGO_MODO=mercadopago`) queda diseñado, no construido, para v2/producción | Reduce riesgo y dependencia externa (credenciales, titular de cuenta, sandbox MP) sin romper la arquitectura: pasar a MP real es cambiar el adaptador. Devoluciones, comprobantes, bandeja, idempotencia y audit trail se mantienen completos; el adaptador simulado firma y entrega el evento al mismo handler de webhook. **Matiza D1** (la seña no es "real" en el MVP) y **D5** (MP sigue siendo el proveedor objetivo, pero no se integra en el MVP). **D2 queda intacta**: idempotencia y audit trail no se recortan. Detalle en `11_pagos_mercadopago.md` §0 |
 
 ## 2. Supuestos (marcados, a validar)
 
 - **Suposición:** pacientes y odontólogos adoptarán el sistema frente al hábito de WhatsApp informal + incumbentes con WhatsApp automático — no validado con usuarios reales (riesgo principal, `discovery.md` §10).
 - **Suposición:** el mail con confirmar/cancelar compensa la falta de WhatsApp en v1 si la entregabilidad es alta (SPF/DKIM/DMARC + métricas).
+- **Suposición (D14):** el checkout simulado alcanza para validar el flujo E2E y la demo académica; no valida la fricción real de pago ni el comportamiento de MP (sandbox/producción) — eso queda diferido a la salida a producción.
 - **Suposición:** la fricción de pagar seña al reservar no baja la conversión si el flujo es de 3–4 pasos (referencia declarada Gendu/MedicAI, eficacia **No evidenciada** por auditoría).
 - **Suposición:** montos configurables por odontólogo bastan como flexibilidad comercial v1 (sin seña porcentual ni por tratamiento).
 - **Suposición:** el alcance (D1) entra en el cuatrimestre manteniendo los recortes; si no, el corte cae sobre reportes/F4-UX, nunca sobre pagos/auditoría (D2).

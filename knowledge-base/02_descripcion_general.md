@@ -11,14 +11,14 @@ Aplicación web para gestión de turnos de un consultorio odontológico single-s
 
 | Capa | Tecnología | Notas |
 |---|---|---|
-| Backend | Python + FastAPI | API REST + webhooks (MercadoPago, mail inbound) |
+| Backend | Python + FastAPI | API REST + webhooks (MercadoPago / adaptador simulado en MVP, mail inbound) |
 | Auth | JWT | Access tokens; refresh según `08_arquitectura_propuesta.md` |
 | ORM | SQLAlchemy | Constraints de dominio a nivel DB (unicidad de slot, no-solapamiento) |
 | DB | PostgreSQL | Transaccional; audit trail append-only |
 | Async/colas | Redis | Colas + reintentos de mails; ventana de recordatorios; idempotencia |
 | Infra | Docker / Docker Compose | Un compose para dev; env vars documentadas en `08_arquitectura_propuesta.md` |
 | Frontend | React + TypeScript + Vite | SPA; flujo de reserva 3–4 pasos |
-| Pagos **[v1]** | MercadoPago (proveedor sugerido v1) | Checkout + webhooks + conciliación; detalle en `11_pagos_mercadopago.md` |
+| Pagos **[v1]** | Proveedor simulado en MVP (`PAGO_MODO=simulado`, D14); MercadoPago real = v2/producción | Checkout + webhooks + conciliación detrás de un puerto/adaptador; detalle en `11_pagos_mercadopago.md` |
 | Mail **[v1]** | Proveedor SMTP con SPF/DKIM/DMARC | Única vía de recordatorio en v1; colas/reintentos en Redis |
 
 ## 3. Arquitectura general (resumen)
@@ -26,7 +26,7 @@ Aplicación web para gestión de turnos de un consultorio odontológico single-s
 ```
 Paciente (SPA) ──HTTPS──▶ FastAPI ──▶ PostgreSQL (turnos, pagos, comprobantes, auditoría)
 Odontólogo/Admin ──JWT──▶   │    ├──▶ Redis (colas mail, reintentos, locks/idempotencia)
-                            │    ├──▶ MercadoPago API (checkout) ◀── webhooks MP ──┘
+                            │    ├──▶ Proveedor de pagos (MP real / simulado MVP) ◀── webhooks ──┘
                             └──▶ SMTP saliente (recordatorios) + inbound (confirmar/cancelar desde el mail)
 ```
 
@@ -38,7 +38,7 @@ Odontólogo/Admin ──JWT──▶   │    ├──▶ Redis (colas mail, re
 
 | Integración | Alcance | Estado |
 |---|---|---|
-| MercadoPago (checkout + webhooks + devoluciones) | Seña al reservar; bandeja de devoluciones; conciliación | [v1] (monto a definir, ver `10_preguntas_abiertas.md`) |
+| Pagos: MercadoPago (checkout + webhooks + devoluciones) — en MVP adaptador simulado (D14) | Seña al reservar; bandeja de devoluciones; conciliación | [v1] simulado; MP real [v2]/producción (monto a definir, ver `10_preguntas_abiertas.md`) |
 | Mail transaccional + recordatorios | Confirmación inmediata, recordatorios con confirmar/cancelar desde el mail, avisos de devolución | [v1] con spec de entregabilidad |
 | WhatsApp Business API | Conector + plantillas modelados | [v2] apagado |
 | Calendario externo (tipo Google) | Sync que bloquee huecos ocupado/no disponible | [v2] diseñado, no construido |

@@ -7,15 +7,15 @@ Relacionadas: `05_reglas_de_negocio.md`, `11_pagos_mercadopago.md`, `08_arquitec
 
 1. Paciente ingresa datos (DNI → reconocimiento si existe) → elige profesional → elige fecha/hora entre slots ofrecibles (RN-DURACION/TOPE/PAUSAS) → ve monto turno + seña → confirma.
 2. Backend crea `turno` en estado `creado` con `idempotency_key` + pre-reserva del slot con TTL (expira si no hay pago; RN-LIBERACION).
-3. Se crea `pago` pendiente + preferencia de MercadoPago; el paciente paga (checkout MP).
-4. Webhook MP (firma + idempotencia, ver `11_pagos_mercadopago.md`) → pago `aprobado` → turno `confirmado` → mail de confirmación inmediata.
+3. Se crea `pago` pendiente (MVP: `proveedor='simulado'`, id `sim_pay_<uuid>`, devuelve `checkout_url` + `checkout_token`; producción: preferencia de MercadoPago). El paciente paga en el checkout (MVP: pantalla "Checkout simulado" → Aprobar/Rechazar/Expirar vía `POST /pagos/{pago_id}/simular`; D14).
+4. Webhook de pagos (en MVP emitido internamente y firmado por el adaptador simulado; firma + idempotencia, ver `11_pagos_mercadopago.md`) → pago `aprobado` → turno `confirmado` → mail de confirmación inmediata.
 5. Si el pago es rechazado o expira la pre-reserva: turno `cancelado` (motivo: pago fallido), slot liberado, aviso por mail.
 
 ## F2. Cancelación con devolución [v1]
 
 1. Paciente (web o link del mail) u odontólogo/recepcionista inicia cancelación; el sistema muestra la regla aplicable **antes** de confirmar: en término → 100 % (RN-SENIA-100), fuera de término → 60 % (RN-SENIA-60).
 2. Al confirmar: turno `cancelado`, slot liberado en el mismo commit (RN-LIBERACION), `devolucion` creada en `pendiente` con porcentaje calculado.
-3. Rol autorizado aprueba en bandeja (actor + fecha + monto) → ejecución contra MP (`mp_refund_id`) → devolucion `ejecutada` → turno `devuelto` → mail con comprobante.
+3. Rol autorizado aprueba en bandeja (actor + fecha + monto) → ejecución contra el proveedor (MVP: adaptador simulado, `sim_refund_<uuid>`; producción: MP, `mp_refund_id`) → devolucion `ejecutada` → turno `devuelto` → mail con comprobante.
 4. Toda devolución es idempotente (reintentos seguros) y deja eventos append-only (RN-BANDEJA, RN-AUDIT).
 
 ## F3. Reprogramación [v1]
@@ -32,8 +32,10 @@ Relacionadas: `05_reglas_de_negocio.md`, `11_pagos_mercadopago.md`, `08_arquitec
 4. Métricas de entrega (enviados, rebotes, aperturas si el proveedor las da) visibles para el consultorio; spec SPF/DKIM/DMARC a nivel config (ver `08_arquitectura_propuesta.md`).
 5. WhatsApp **[v2]**: mismo evento, conector apagado; al encenderse, reutiliza `turno_id` + `plantilla_version` sin migraciones.
 
-## F5. Webhook MercadoPago + conciliación [v1]
+## F5. Webhook de pagos (MercadoPago / simulado) + conciliación [v1]
+
+> **MVP (D14)**: el mismo handler procesa eventos que emite el adaptador simulado (firmados con `MP_WEBHOOK_SECRET`); la conciliación compara `pago`/`evento_pago` internos contra el estado del proveedor simulado (verificación de consistencia interna).
 
 1. `POST /webhooks/mercadopago` valida firma → registra `evento_pago(webhook_recibido)` → procesa por `mp_payment_id` con idempotencia (replay seguro).
 2. Concilia: `pago.estado` vs. estado MP; discrepancias → alerta en bandeja + evento `conciliado` con detalle.
-3. Devoluciones ejecutadas contra API MP con `idempotency_key`; `mp_refund_id` guardado; reintentos solo re-ejecutan consulta, nunca duplican (ver `11_pagos_mercadopago.md`).
+3. Devoluciones ejecutadas contra el proveedor (MVP: adaptador simulado, `sim_refund_<uuid>`; producción: API MP) con `idempotency_key`; `mp_refund_id` guardado; reintentos solo re-ejecutan consulta, nunca duplican (ver `11_pagos_mercadopago.md`).

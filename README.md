@@ -2,13 +2,13 @@
 
 SaaS de gestión odontológica single-sede (v1): agenda multi-profesional con
 protección anti-solapamiento a nivel de base de datos, reserva online en 3–4
-pasos, seña vía MercadoPago (checkout + webhook server-to-server), recordatorios
+pasos, seña con pagos simulados en el MVP (checkout simulado + webhook server-to-server firmado; MercadoPago real = v2/producción), recordatorios
 por mail vía workers Redis, ficha mínima de paciente con consentimiento
 bloqueante, agenda de staff aislada por profesional y reportes/caja mínimos.
 
 Stack: Python + FastAPI (Pydantic v2) · SQLAlchemy + Alembic · PostgreSQL ·
 Redis · Docker / Docker Compose · React + TypeScript estricto + Vite.
-Pagos [v1]: MercadoPago. Mail [v1]: SMTP vía workers Redis, solo desde
+Pagos [MVP]: proveedor simulado detrás del mismo puerto/adaptador (`PAGO_MODO=simulado`, D14); MercadoPago real = v2/producción. Mail [v1]: SMTP vía workers Redis, solo desde
 `MAIL_FROM` alineado. WhatsApp y ARCA apagados en v1 (`WHATSAPP_ENABLED=false`,
 `ARCA_ENABLED=false`).
 
@@ -77,8 +77,9 @@ documentan nombres y propósito — jamás valores reales (P5):
 | `JWT_ACCESS_MIN` | TTL del access token, en minutos |
 | `JWT_REFRESH_DIAS` | TTL del refresh token, en días |
 | `JWT_ACTION_MIN` | TTL de tokens de acción por mail, en minutos |
-| `MP_ACCESS_TOKEN` | Credencial de prueba de MercadoPago (ficticia en dev) |
-| `MP_WEBHOOK_SECRET` | Firma del webhook server-to-server de MercadoPago |
+| `PAGO_MODO` | `simulado` (default MVP/dev) o `mercadopago` (diseñado, no construido en el MVP). **Nunca `simulado` en producción** (P15) |
+| `MP_WEBHOOK_SECRET` | Firma del webhook server-to-server; se usa también en modo simulado (el adaptador firma con HMAC) |
+| `MP_ACCESS_TOKEN` / `MP_PUBLIC_KEY` | Opcionales: solo requeridas si `PAGO_MODO=mercadopago` (ficticias en dev) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | Salida SMTP (en dev apuntan a MailHog) |
 | `MAIL_FROM` | Único remitente alineado autorizado (P14) |
 | `RECORDATORIO_VENTANA_HS` | Ventana de recordatorios por mail |
@@ -122,7 +123,7 @@ python -m alembic upgrade head
 
 Revisiones reales en `backend/alembic/versions/`:
 `001_core_v2off.py` (core + tablas v2 apagadas), `002_disponibilidad_bloqueo.py`,
-`003_turno_historial.py`. Cero `create_all` en runtime (P3).
+`003_turno_historial.py`, `004_recordatorio_mail.py` (head actual). Cero `create_all` en runtime (P3).
 
 ### Seed dev (datos ficticios, idempotente)
 
@@ -145,7 +146,7 @@ cd frontend && npm install && npm run typecheck
 ```
 
 Suite backend en `backend/app/tests/` (config `backend/pytest.ini`,
-convención `test_*.py`): salud, contrato de env, migraciones 001–003, seed,
+convención `test_*.py`): salud, contrato de env, migraciones 001–004, seed,
 auth JWT + RBAC + rate-limit, disponibilidad/motor de slots, reservas/estados/
 expiración TTL, ficha + consentimiento, aislamiento por profesional.
 
@@ -189,11 +190,11 @@ turnos-odontologia/
 │   ├── app/infra/           # Adaptadores db/redis/mp/smtp
 │   ├── app/workers/         # Worker de mails Redis (python -m app.workers.main)
 │   ├── app/tests/           # Suite pytest (test_*.py, conftest, helpers)
-│   └── alembic/             # env.py + versions/001, 002, 003
+│   └── alembic/             # env.py + versions/001, 002, 003, 004
 ├── frontend/                # SPA React 18 + TS estricto + Vite 6
 │   └── src/                 # api/client, auth/store, components/HealthBadge, pages/{reserva,agenda,bandeja,reportes}, App.tsx
 ├── openspec/                # Cambios OPSX: changes/archive/ (C-01…C-06 cerrados), specs/, config.yaml
-├── knowledge-base/          # Fuente de verdad del dominio (11 docs: 01 visión … 11 pagos MP)
+├── knowledge-base/          # Fuente de verdad del dominio (11 docs: 01 visión … 11 pagos, MP real + modo simulado D14)
 ├── discovery/               # discovery.md/pdf fuente de la KB
 ├── CHANGES.md               # Índice canónico de los 13 changes, dependencias y roadmap
 ├── AGENTS.md / CLAUDE.md    # Instrucciones de agentes (stack, skills, reglas duras U1–U3/P1–P14)
@@ -244,10 +245,13 @@ Secretos solo vía env vars (P5).
   C-09 `mails-recordatorios` / C-10 `frontend-reserva-publica` / C-12
   `reportes-exportaciones`, después C-11 `frontend-agenda-backoffice` y cierre
   C-13 `hardening-cumplimiento-cierre` (requiere C-09 + C-11 + C-12).
-- **Nota**: la numeración de migraciones de C-07 en adelante se renumeró en el
-  apply de C-05 (003 = turno+historial; C-07→004, C-08→005, C-09→006); usar los
-  números actualizados al proponer esos changes.
+- **Nota**: head actual de migraciones = `004_recordatorio_mail` (C-09); C-07 →
+  `005` y C-08 → `006`. El "C-07" archivado en openspec es C-07F (frontend);
+  el C-07 de `CHANGES.md` es pagos.
+- **Pagos (D14, 2026-11-05)**: en el MVP la seña usa un proveedor simulado
+  (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; C-07 y C-08 siguen
+  pendientes con alcance reescrito. Ver `knowledge-base/11_pagos_mercadopago.md` §0.
 
 Gobernanza: leer `CHANGES.md` y la KB relevante antes de cada
-`/opsx:propose`; reglas duras en `AGENTS.md` (U1–U3, P1–P14). Sin commit ni push
+`/opsx:propose`; reglas duras en `AGENTS.md` (U1–U3, P1–P15). Sin commit ni push
 sin pedido explícito (U1).

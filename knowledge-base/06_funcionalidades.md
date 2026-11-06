@@ -9,8 +9,8 @@ Etiqueta de alcance en cada historia: **[v1]** / **[v2]**.
 - **A1**: como paciente, reservo en flujo canónico 3–4 pasos (datos → profesional → fecha/hora → confirmación) para no llamar **[v1]**.
 - **A2**: como paciente existente, me reconocen por DNI y se precargan mis datos **[v1]**.
 - **A3**: recibo confirmación inmediata por mail al reservar **[v1]**.
-- **A4**: pago la seña al reservar (MercadoPago) viendo monto del turno y de la seña antes de pagar **[v1]**.
-- **A5**: si el pago falla, mi slot no queda bloqueado para otros (expiración de pre-reserva) **[v1]** — ver `07_flujos_principales.md`.
+- **A4**: pago la seña al reservar (MVP: pantalla "Checkout simulado" con Aprobar/Rechazar/Expirar; MercadoPago real en v2/producción, D14) viendo monto del turno y de la seña antes de pagar **[v1]**.
+- **A5**: si el pago falla, mi slot no queda bloqueado para otros (expiración de pre-reserva, también si en el checkout simulado se rechaza o expira) **[v1]** — ver `07_flujos_principales.md`.
 
 ## Épica B — Cancelación y reprogramación [v1]
 
@@ -28,9 +28,9 @@ Etiqueta de alcance en cada historia: **[v1]** / **[v2]**.
 ## Épica D — Seña, devoluciones y comprobantes [v1]
 
 - **D1**: configuro mi monto de turno y de seña (por odontólogo) **[v1]**.
-- **D2**: opero la bandeja de devoluciones (aprobar/rechazar/ejecutar) con trazabilidad completa **[v1]**.
-- **D3**: recibo comprobante (recibo interno v1) por pago y por devolución **[v1]**.
-- **D4**: concilio pagos contra reportes de MercadoPago **[v1]** — ver `11_pagos_mercadopago.md`.
+- **D2**: opero la bandeja de devoluciones (aprobar/rechazar/ejecutar) con trazabilidad completa; la ejecución en MVP la hace el adaptador simulado, sin mover dinero, con marca "(simulado)" **[v1]**.
+- **D3**: recibo comprobante (recibo interno v1, con leyenda "SIMULADO — sin valor fiscal ni movimiento de dinero" en MVP) por pago y por devolución **[v1]**.
+- **D4**: concilio pagos (MVP: verificación de consistencia interna contra el proveedor simulado; contra reportes de MercadoPago en producción) **[v1]** — ver `11_pagos_mercadopago.md`.
 - **D5**: factura ARCA automática **[v2]** post-v1. **D6**: obras sociales/liquidaciones **[v2]**.
 
 ## Épica E — Recordatorios por mail [v1]
