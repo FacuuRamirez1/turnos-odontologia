@@ -53,10 +53,29 @@ La fuente de verdad del dominio vive en `knowledge-base/`. **Leé el archivo rel
 | **Backend Aux** | Auth, pagos, colas, ficha clínica | `auth-implementation-patterns`, `stripe-integration` (análogo para idempotencia/webhooks de pagos, MP real y simulado), `redis-core`, `healthcare-emr-patterns` |
 | **Frontend** | Reserva 3-4 pasos, agenda, UX | `vercel-react-best-practices`, `frontend-design` |
 | **Orquestación** | OPSX propone/aplica/archiva | `openspec-propose`, `openspec-explore`, `openspec-apply-change`, `openspec-archive-change`, `openspec-sync-specs`, `openspec-update-change` |
+| **Validación SDD** | Auditoría de escenarios de turnos y pagos simulados | `validador-escenarios-turnos` |
 
 Cargá la skill correspondiente al contexto ANTES de escribir código.
 
 > Los compact rules de cada skill los resuelve el orquestador desde `.atl/skill-registry.md` (generado por `skill-registry`; no versionado — no está en el repo). Esta tabla solo mapea skill→rol.
+
+### Uso de la skill propia: `validador-escenarios-turnos`
+
+- **Ubicación**: [SKILL.md](.agents/skills/validador-escenarios-turnos/SKILL.md) (indexada en `.atl/skill-registry.md`).
+- **Cuándo usarla**: durante `/opsx:explore` y `/opsx:propose` al preparar o revisar escenarios SDD de reserva pública (`C-10` `frontend-reserva-publica`), pagos simulados o reglas de turnos antes de pasar a `/opsx:apply`.
+- **Qué necesita (entradas)**: el borrador de escenarios (`proposal.md`, `specs/` o `tasks.md`) y lectura de `knowledge-base/` (`04`, `05`, `06`, `07`, `10`, `11`).
+- **Cómo revisar el resultado**: comprobar que el reporte incluya la tabla de contraste con las 9 reglas `RN-*`, evalúe explícitamente al menos 6 de las 9 reglas, verifique los 3 escenarios obligatorios (funcionamiento esperado, error de negocio y caso borde específicos del dominio), controle `PAGO_MODO=simulado` + marca `"(simulado)"` + `checkout_token` de 1 uso, no invente definiciones para `Q1`/`Q3`/`Q4`, y emita veredicto `✅ Aprobado` o `❌ Reglas vulneradas` con correcciones accionables.
+
+---
+
+## Integración MCP (`Context7`)
+
+> `context7` es una **integración externa MCP** (configurada en `opencode.json`), **no una skill**.
+
+- **Propósito**: consultar documentación oficial y ejemplos actualizados por versión de las librerías del stack (`react`, `react-router-dom`, `vite`, `fastapi`, `pydantic`, `sqlalchemy`) para evitar APIs deprecadas al diseñar e implementar changes.
+- **Capacidades / herramientas**: `resolve-library-id` (resuelve nombre de librería → ID compatible) y `query-docs` (recupera documentación y snippets filtrados por tópico).
+- **Momento de uso**: en `/opsx:explore` y `/opsx:propose` (p. ej. diseño de rutas públicas y `useSearchParams` en `C-10`), o cuando haya dudas sobre firmas/APIs de dependencias reales del proyecto.
+- **Límites de acceso**: solo lectura de documentación pública externa por `stdio` (`npx -y @upstash/context7-mcp`). No tiene acceso a PostgreSQL, Redis, archivos `.env`, credenciales (`P5`) ni datos de pacientes (`P11`). No usar `CONTEXT7_API_KEY` hardcodeada en el repositorio.
 
 ---
 

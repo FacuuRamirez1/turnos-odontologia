@@ -337,6 +337,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 
 ### [C-10] `frontend-reserva-publica`
 - **Estado**: `[ ]` pendiente
+- **Preparación OPSX**: Change propuesto y validado en `openspec/changes/c-10-frontend-reserva-publica/` (listo para implementar en etapa posterior; no implementado ni archivado).
 - **Scope**: SPA pública de reserva 3–4 pasos + páginas de acción por mail + precios públicos (épica A cara visible, D11)
   - Flujo canónico: datos (DNI con reconocimiento/precarga) → profesional → fecha/hora (slots de `GET /disponibilidad`) → confirmación viendo monto turno + seña (A4) → pantalla "Checkout simulado" (D14: Aprobar/Rechazar/Expirar vía `POST /pagos/{pago_id}/simular` con `checkout_token`; el frontend nunca confirma; checkout MP real = v2/producción) → confirmación inmediata, con banner "(simulado)"
   - Páginas `/mail/confirmar`, `/mail/cancelar`, `/mis-turnos` (token, nunca DNI solo) con estados de error amigables

@@ -169,15 +169,14 @@ Pre-digested rules per skill. Delegators copy matching blocks into sub-agent pro
 | KB abiertas | knowledge-base/10_preguntas_abiertas.md | Open questions |
 | KB pagos | knowledge-base/11_pagos_mercadopago.md | Pagos spec: modo simulado MVP (D14) + MercadoPago target seña/devoluciones |
 | OpenSpec root | openspec/ | specs + changes + archive live here |
-
-> NOTE — conventions pending re-index: `CLAUDE.md` / `AGENTS.md` do NOT exist yet (generated later by agent-instruction). Re-run this registry after that step to index hard rules + referenced paths. No `agents.md`, `.cursorrules`, `GEMINI.md`, or `copilot-instructions.md` found at project root.
+| Instrucciones agente | AGENTS.md / CLAUDE.md | Stack, KB, skills, integración MCP, roadmap y reglas duras U1–U3 / P1–P15 |
 
 Read the convention files listed above for project-specific patterns and rules. All referenced paths have been extracted — no need to read index files to discover more.
 
 ## Deduplication & Gaps
 
-- Canonical skill source: `.agents/skills/` (15 dirs). `.opencode/skills/` duplicates the 6 openspec-* skills — delegators must use the `.agents/skills/` path.
+- Canonical skill source: `.agents/skills/` (16 dirs, incluida `validador-escenarios-turnos`). `.opencode/skills/` duplicates the 6 openspec-* skills — delegators must use the `.agents/skills/` path.
 - `.claude/skills/` is empty; no global directories were scanned (project decision).
 - Gap (known): no MercadoPago-specific skill; `stripe-integration` is the webhook/idempotency analog for C-07/C-08 (simulated provider in MVP, D14).
 - Gap (known): no docker-compose skill installed at registry time; `CHANGES.md`/KB assume Docker parity — revisit if a docker skill is added.
-- `state.skills.installed` lists the 9 coding skills; all 9 verified present in `.agents/skills/` + 6 openspec-* workflow skills = 15 total.
+- `state.skills.installed` lists the 9 coding skills; sumando `validador-escenarios-turnos` (skill propia del proyecto) + 6 openspec-* workflow skills = 16 total.

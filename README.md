@@ -123,7 +123,8 @@ python -m alembic upgrade head
 
 Revisiones reales en `backend/alembic/versions/`:
 `001_core_v2off.py` (core + tablas v2 apagadas), `002_disponibilidad_bloqueo.py`,
-`003_turno_historial.py`, `004_recordatorio_mail.py` (head actual). Cero `create_all` en runtime (P3).
+`003_turno_historial.py`, `004_recordatorio_mail.py`, `005_pago_evento_pago.py`
+(head actual tras C-07). Cero `create_all` en runtime (P3).
 
 ### Seed dev (datos ficticios, idempotente)
 
@@ -190,14 +191,16 @@ turnos-odontologia/
 │   ├── app/infra/           # Adaptadores db/redis/mp/smtp
 │   ├── app/workers/         # Worker de mails Redis (python -m app.workers.main)
 │   ├── app/tests/           # Suite pytest (test_*.py, conftest, helpers)
-│   └── alembic/             # env.py + versions/001, 002, 003, 004
+│   └── alembic/             # env.py + versions/001, 002, 003, 004, 005
 ├── frontend/                # SPA React 18 + TS estricto + Vite 6
 │   └── src/                 # api/client, auth/store, components/HealthBadge, pages/{reserva,agenda,bandeja,reportes}, App.tsx
-├── openspec/                # Cambios OPSX: changes/archive/ (C-01…C-06 cerrados), specs/, config.yaml
+├── openspec/                # Cambios OPSX: changes/archive/, changes/c-10-frontend-reserva-publica/, specs/
+├── docs/skills-mcp/         # Fichas y evidencias del TP de Metodología I (investigacion.md, aplicacion.md)
 ├── knowledge-base/          # Fuente de verdad del dominio (11 docs: 01 visión … 11 pagos, MP real + modo simulado D14)
 ├── discovery/               # discovery.md/pdf fuente de la KB
 ├── CHANGES.md               # Índice canónico de los 13 changes, dependencias y roadmap
-├── AGENTS.md / CLAUDE.md    # Instrucciones de agentes (stack, skills, reglas duras U1–U3/P1–P14)
+├── AGENTS.md / CLAUDE.md    # Instrucciones de agentes (stack, skills, MCP Context7, reglas duras U1–U3/P1–P15)
+├── opencode.json            # Configuración MCP reproducible del proyecto (context7, sin secretos)
 ├── docker-compose.yml       # Topología local: api, web, db, redis, mailhog, worker
 ├── .env.example             # Contrato canónico de entorno (copiar a .env; jamás commitear .env real)
 ├── .github/workflows/ci.yml # CI: backend (ruff + mypy + pytest) y frontend (tsc + eslint + build) en paralelo
@@ -236,22 +239,56 @@ Secretos solo vía env vars (P5).
 - **Cerrados (verificado en `openspec/changes/archive/` y `CHANGES.md [x]`)**:
   C-01 `foundation-setup`, C-02 `core-models-usuarios-pacientes`, C-03
   `auth-jwt-rbac`, C-04 `disponibilidad-slots`, C-05 `reserva-turnos-estados`,
-  C-06 `ficha-paciente-consentimiento`. `openspec list` no reporta changes
-  activos.
+  C-06 `ficha-paciente-consentimiento`, C-07F `frontend-interfaz-agenda`,
+  C-07 `pagos-mp-checkout-webhook` (modo simulado D14) y C-09
+  `mails-recordatorios`.
+- **En preparación (artefactos SDD listos para implementar, sin código ni archivo)**:
+  `C-10` `frontend-reserva-publica` en `openspec/changes/c-10-frontend-reserva-publica/`.
 - **Total del roadmap**: 13 changes en 7 fases (`CHANGES.md`).
 - **Camino crítico (9)**: `C-01 → C-02 → C-03 → C-04 → C-05 → C-07 → C-08 → C-11 → C-13`.
-- **Próximos según `CHANGES.md`**: C-07 `pagos-mp-checkout-webhook` (desbloquea
-  pagos), luego en paralelo C-08 `devoluciones-comprobantes-conciliacion` /
-  C-09 `mails-recordatorios` / C-10 `frontend-reserva-publica` / C-12
-  `reportes-exportaciones`, después C-11 `frontend-agenda-backoffice` y cierre
-  C-13 `hardening-cumplimiento-cierre` (requiere C-09 + C-11 + C-12).
-- **Nota**: head actual de migraciones = `004_recordatorio_mail` (C-09); C-07 →
-  `005` y C-08 → `006`. El "C-07" archivado en openspec es C-07F (frontend);
-  el C-07 de `CHANGES.md` es pagos.
+- **Pendientes**: C-08 `devoluciones-comprobantes-conciliacion`, C-10
+  `frontend-reserva-publica` (preparado), C-11 `frontend-agenda-backoffice`,
+  C-12 `reportes-exportaciones` y C-13 `hardening-cumplimiento-cierre`.
+- **Nota**: head actual de migraciones = `005_pago_evento_pago` (C-07); C-08 →
+  `006`. El `2026-11-05-c-07-frontend-interfaz-agenda` archivado en openspec
+  corresponde a C-07F (frontend); el C-07 de pagos quedó archivado en
+  `2026-11-13-c-07-pagos-mp-checkout-webhook`.
 - **Pagos (D14, 2026-11-05)**: en el MVP la seña usa un proveedor simulado
-  (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; C-07 y C-08 siguen
-  pendientes con alcance reescrito. Ver `knowledge-base/11_pagos_mercadopago.md` §0.
+  (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; C-07 está cerrado en
+  modo simulado y C-08 mantiene alcance reescrito. Ver
+  `knowledge-base/11_pagos_mercadopago.md` §0.
 
 Gobernanza: leer `CHANGES.md` y la KB relevante antes de cada
 `/opsx:propose`; reglas duras en `AGENTS.md` (U1–U3, P1–P15). Sin commit ni push
 sin pedido explícito (U1).
+
+## 8. Integración MCP y Skill propia (Metodología I)
+
+### Servidor MCP (`Context7` — `@upstash/context7-mcp`)
+
+- **Propósito**: consultar documentación oficial y ejemplos por versión de las librerías del stack (`react`, `react-router-dom`, `vite`, `fastapi`, etc.) en modo **solo lectura** durante la exploración y planificación SDD. No accede a PostgreSQL, Redis, archivos `.env` ni datos de pacientes.
+- **Requisitos**: Node.js `>= 20` (`npm` / `npx` en PATH) y acceso HTTP de salida a Context7.
+- **Variables de entorno**: ninguna obligatoria para uso estándar; opcionalmente `CONTEXT7_API_KEY` para mayor cuota, referenciada vía entorno (`{env:CONTEXT7_API_KEY}`), jamás escrita en archivos versionados (`P5`).
+- **Configuración reproducible del proyecto** ([opencode.json](opencode.json)):
+  ```json
+  {
+    "$schema": "https://opencode.ai/config.json",
+    "mcp": {
+      "context7": {
+        "type": "local",
+        "command": ["npx", "-y", "@upstash/context7-mcp"],
+        "enabled": true
+      }
+    }
+  }
+  ```
+  Para clientes con bloque `mcpServers` (Antigravity / Claude Desktop): usar `"command": "npx"`, `"args": ["-y", "@upstash/context7-mcp"]` (en configuraciones globales externas, ej. `~/.config/opencode/opencode.json` o la configuración MCP del IDE, replicar el mismo bloque).
+- **Comprobación de conexión y herramienta real**:
+  1. Verificar en el cliente MCP (ej. `/mcps` en OpenCode) que `context7` figure conectado con las tools `resolve-library-id` y `query-docs`.
+  2. Probar una invocación real sobre `stdio`: enviar `initialize` + `tools/call` (`resolve-library-id` con `libraryName: "react-router"` y luego `query-docs` sobre `/remix-run/react-router`). Evidencia registrada en [mcp-context7-ejecucion.md](docs/skills-mcp/evidencias/mcp-context7-ejecucion.md).
+- **Troubleshooting en Windows**: si un entorno restringido o PowerShell bloquea `npx` sin wrapper o hay demora en la primera ejecución, ejecutar primero `npx -y @upstash/context7-mcp --help` en terminal con red para poblar la caché npm, o invocar mediante `cmd /c npx -y @upstash/context7-mcp`. Si el entorno de sandbox bloquea salida HTTP, habilitar red al cliente MCP antes de consultar.
+
+### Skill propia (`validador-escenarios-turnos`) y documentación del TP
+
+- Skill de proyecto ubicada en [SKILL.md](.agents/skills/validador-escenarios-turnos/SKILL.md) e indexada en [.atl/skill-registry.md](.atl/skill-registry.md) + `AGENTS.md` / `CLAUDE.md`.
+- Documentación completa del TP: [investigacion.md](docs/skills-mcp/investigacion.md) (Parte 1) y [aplicacion.md](docs/skills-mcp/aplicacion.md) (Parte 2).

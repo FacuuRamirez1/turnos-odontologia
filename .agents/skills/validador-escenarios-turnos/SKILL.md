@@ -1,3 +1,8 @@
+---
+name: validador-escenarios-turnos
+description: Revisa y valida escenarios SDD de reserva de turnos (funcionamiento esperado, error de negocio y caso borde) contra las reglas de negocio del consultorio odontológico y pagos simulados (D14).
+---
+
 # SKILL: validador-escenarios-turnos
 
 ## Nombre
@@ -118,7 +123,7 @@ Listo para pasar a implementar con TDD / Pendiente de correcciones antes de impl
 ```
 
 ## Criterios de revisión del resultado
-- El reporte debe mencionar explícitamente al menos 6 de las 8 reglas de negocio listadas.
+- El reporte debe mencionar explícitamente al menos 6 de las 9 reglas de negocio listadas.
 - Si el veredicto es "❌ Reglas vulneradas", debe incluir al menos una corrección accionable.
 - Los casos de borde deben ser específicos del dominio odontológico (no genéricos como "error de red").
 - No se debe marcar el change como implementado ni archivado; esta skill solo prepara y valida.
