@@ -260,7 +260,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ## FASE 3 — Pagos (simulados en MVP, D14)
 
 ### [C-07] `pagos-mp-checkout-webhook`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Seña vía **proveedor de pagos simulado** (D14): checkout simulado + webhook idempotente firmado + conciliación interna (épica D base, F1/F5). MercadoPago real (`PAGO_MODO=mercadopago`) queda diseñado, **no construido** en el MVP
   - Puerto `ProveedorPago` + adaptador `simulado` (`infra/pago_simulado`); selección por `PAGO_MODO=simulado|mercadopago` (default `simulado`). `MP_ACCESS_TOKEN`/`MP_PUBLIC_KEY` opcionales (solo con `mercadopago`); `MP_WEBHOOK_SECRET` se usa también en simulado (el adaptador firma con HMAC y entrega al **mismo** handler del webhook)
   - Modelos: `Pago` (separado del turno, D13) con `proveedor ∈ {simulado, mercadopago}`, `mp_payment_id` único (sintético `sim_pay_<uuid>`), `mp_preference_id` nullable, estados `pendiente|aprobado|rechazado|...`, `idempotency_key` única; `EventoPago` append-only sin UPDATE/DELETE

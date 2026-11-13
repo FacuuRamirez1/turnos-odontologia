@@ -32,6 +32,7 @@ from app.domain.pacientes.service import (
     normalizar_dni,
     validar_formato_dni,
 )
+from app.domain.pagos.service import get_proveedor_pago
 from app.domain.turnos.cancelacion import cotizar_devolucion
 from app.domain.turnos.estados import (
     ActorNoAutorizado,
@@ -42,6 +43,7 @@ from app.domain.turnos.estados import (
 )
 from app.domain.turnos.ocupados import hay_solape, ocupados_rango
 from app.infra.db.models import Bloqueo, Disponibilidad, Odontologo, Paciente, Turno
+from app.infra.db.models.pago import EventoPago, Pago
 from app.infra.db.session import get_db
 from app.infra.redis.rate_limit import LoginRateLimiter, build_rate_limiter
 
@@ -113,9 +115,12 @@ class ReservaOut(BaseModel):
     fin: datetime
     estado: str
     canal: str
+    checkout_url: str | None = None
+    checkout_token: str | None = None
 
 
-def _out(fila: Turno) -> ReservaOut:
+def _out(fila: Turno, checkout_url: str | None = None,
+         checkout_token: str | None = None) -> ReservaOut:
     return ReservaOut(
         id=uuid.UUID(str(fila.id)),
         paciente_id=uuid.UUID(str(fila.paciente_id)),
@@ -124,6 +129,8 @@ def _out(fila: Turno) -> ReservaOut:
         fin=fila.fin,
         estado=str(fila.estado),
         canal=str(fila.canal),
+        checkout_url=checkout_url,
+        checkout_token=checkout_token,
     )
 
 
@@ -199,11 +206,15 @@ def _slot_ofrecido(
 
 def crear_reserva(
     db: Session, cuerpo: ReservaCreate, idempotency_key: str, canal: str = "web",
-) -> tuple[Turno, bool]:
+) -> tuple[Turno, Pago | None, bool]:
     """Núcleo compartido web/recepción: valida y persiste (o replays).
 
-    Retorna `(turno, creado)`. Levanta `ConsentimientoRequerido`,
+    Retorna `(turno, pago, creado)`. Levanta `ConsentimientoRequerido`,
     `ValueError` (slot/fecha) o `SlotOcupado`.
+
+    C-07: escribe atómicamente `turno(creado)` + `pago(pendiente)` +
+    `evento_pago(creado)` en la misma transacción antes de invocar el
+    adaptador (nunca cobrar sin rastro local, P10).
     """
     settings = get_settings()
     ttl_min = settings.reserva_ttl_min
@@ -214,7 +225,7 @@ def crear_reserva(
         db.query(Turno).filter(Turno.idempotency_key == idempotency_key).first()
     )
     if existente is not None:
-        return existente, False
+        return existente, None, False
 
     svc = PacienteService(db)
     try:
@@ -270,11 +281,36 @@ def crear_reserva(
             db.query(Turno).filter(Turno.idempotency_key == idempotency_key).first()
         )
         if replay is not None:
-            return replay, False
+            return replay, None, False
         raise SlotOcupado("slot ocupado (RN-DOBLE/RN-SOLAPE)") from exc
+
+    # C-07: pago + evento_pago en la misma transacción, antes del adaptador.
+    monto_senia = od.monto_senia
+    pago = Pago(
+        turno_id=fila.id,
+        odontologo_id=cuerpo.odontologo_id,
+        monto=monto_senia,
+        moneda="ARS",
+        proveedor="simulado",
+        mp_payment_id=f"sim_pay_{uuid.uuid4()}",
+        estado="pendiente",
+        idempotency_key=f"idem-{idempotency_key}",
+    )
+    db.add(pago)
+    db.flush()
+    fila.pago_id = pago.id
+    db.add(fila)
+    evento = EventoPago(
+        pago_id=pago.id,
+        tipo_evento="creado",
+        payload_json={"monto": float(monto_senia), "moneda": "ARS"},
+        actor="sistema",
+    )
+    db.add(evento)
     db.commit()
     db.refresh(fila)
-    return fila, True
+    db.refresh(pago)
+    return fila, pago, True
 
 
 def _duracion_franja(
@@ -303,7 +339,7 @@ def reservar(
     if not key:
         key = f"auto-{uuid.uuid4().hex}"
     try:
-        fila, creado = crear_reserva(db, cuerpo, key.strip(), canal="web")
+        fila, pago, creado = crear_reserva(db, cuerpo, key.strip(), canal="web")
     except ConsentimientoRequerido as exc:
         return JSONResponse(
             status_code=422, content={"code": "CONSENTIMIENTO_REQUERIDO", "detail": str(exc)})
@@ -313,9 +349,18 @@ def reservar(
     except ValueError as exc:
         return JSONResponse(
             status_code=422, content={"code": "SLOT_NO_DISPONIBLE", "detail": str(exc)})
-    if not creado:
+    if not creado or pago is None:
         return JSONResponse(status_code=200, content=_out(fila).model_dump(mode="json"))
-    return _out(fila)
+    # C-07: invocar adaptador SOLO tras commit local (nunca cobrar sin rastro).
+    proveedor = get_proveedor_pago()
+    checkout_url, checkout_token = proveedor.generar_checkout({
+        "id": pago.id, "turno_id": pago.turno_id,
+        "odontologo_id": pago.odontologo_id, "monto": pago.monto,
+        "moneda": pago.moneda, "proveedor": pago.proveedor,
+        "mp_payment_id": pago.mp_payment_id, "estado": pago.estado,
+        "idempotency_key": pago.idempotency_key,
+    })
+    return _out(fila, checkout_url=checkout_url, checkout_token=checkout_token)
 
 
 TELEFONICA = require_role("recepcionista", "admin")
@@ -335,7 +380,7 @@ def reservar_telefonica(
     if not key:
         key = f"tel-{uuid.uuid4().hex}"
     try:
-        fila, _ = crear_reserva(db, cuerpo, key.strip(), canal="recepcion")
+        fila, pago, creado = crear_reserva(db, cuerpo, key.strip(), canal="recepcion")
     except ConsentimientoRequerido as exc:
         return JSONResponse(
             status_code=422, content={"code": "CONSENTIMIENTO_REQUERIDO", "detail": str(exc)})
@@ -345,7 +390,17 @@ def reservar_telefonica(
     except ValueError as exc:
         return JSONResponse(
             status_code=422, content={"code": "SLOT_NO_DISPONIBLE", "detail": str(exc)})
-    return _out(fila)
+    if not creado or pago is None:
+        return JSONResponse(status_code=200, content=_out(fila).model_dump(mode="json"))
+    proveedor = get_proveedor_pago()
+    checkout_url, checkout_token = proveedor.generar_checkout({
+        "id": pago.id, "turno_id": pago.turno_id,
+        "odontologo_id": pago.odontologo_id, "monto": pago.monto,
+        "moneda": pago.moneda, "proveedor": pago.proveedor,
+        "mp_payment_id": pago.mp_payment_id, "estado": pago.estado,
+        "idempotency_key": pago.idempotency_key,
+    })
+    return _out(fila, checkout_url=checkout_url, checkout_token=checkout_token)
 
 
 # --- Cancelación en dos pasos: cotizar → confirmar (design D5, B1–B3) ---
@@ -553,6 +608,15 @@ def reprogramar(
             "code": "SLOT_OCUPADO", "detail": "Idempotency-Key ya usada"})
 
     origen_id = uuid.UUID(str(turno.id))
+    pago_id_heredado = turno.pago_id
+    if pago_id_heredado is None:
+        pago_asociado = (
+            db.query(Pago)
+            .filter(Pago.turno_id == origen_id, Pago.is_active.is_(True))
+            .first()
+        )
+        if pago_asociado is not None:
+            pago_id_heredado = pago_asociado.id
     try:
         transition(db, origen_id, "reprogramado",
                    actor_tipo=actor_tipo, actor_id=actor_id,
@@ -560,7 +624,7 @@ def reprogramar(
         nuevo_turno = Turno(
             paciente_id=turno.paciente_id, odontologo_id=turno.odontologo_id,
             inicio=nuevo, fin=fin, estado="confirmado", canal=str(turno.canal),
-            idempotency_key=nueva_key, pago_id=turno.pago_id,
+            idempotency_key=nueva_key, pago_id=pago_id_heredado,
             reprogramado_de_id=origen_id)
         db.add(nuevo_turno)
         db.flush()

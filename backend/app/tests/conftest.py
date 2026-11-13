@@ -64,11 +64,17 @@ def auth_client(
     entre tests); base https para que el jar envíe la cookie `Secure`.
     """
     monkeypatch.setenv("FRONTEND_URL", "https://test.ficticia.example.ar")
+    monkeypatch.setenv("MP_WEBHOOK_SECRET", TEST_AUTH_SECRET)
     dependencies.configure_security(TEST_AUTH_SECRET, TokenBlacklist(client=None))
     auth_module.reset_rate_limiter()
+    from app.api.pagos import reset_sandbox_limiter
     from app.api.reservas import reset_reservas_limiter
+    from app.domain.pagos.service import reset_proveedor_pago
 
     reset_reservas_limiter()
+    reset_sandbox_limiter()
+    reset_proveedor_pago()
     app.dependency_overrides[get_db] = lambda: db_session
     yield TestClient(app, base_url="https://testserver")
+    reset_proveedor_pago()
     app.dependency_overrides.clear()

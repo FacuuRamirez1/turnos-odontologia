@@ -1,7 +1,5 @@
 """Tests C-01 §4 — contrato de settings y flags v2 apagados (U2: 3 escenarios)."""
 
-import os
-
 import pytest
 
 from app.core.settings import Settings
@@ -13,6 +11,7 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "DATABASE_URL",
         "REDIS_URL",
         "JWT_SECRET",
+        "ENVIRONMENT",
         "RECORDATORIO_VENTANA_HS",
         "RESERVA_TTL_MIN",
         "WHATSAPP_ENABLED",
@@ -21,6 +20,10 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "MAIL_RATE_LIMIT",
         "API_PUBLIC_URL",
         "WORKER_SCHEDULER_TICK_S",
+        "PAGO_MODO",
+        "MP_ACCESS_TOKEN",
+        "MP_PUBLIC_KEY",
+        "MP_WEBHOOK_SECRET",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -48,12 +51,12 @@ def test_settings_mails_c09_defaults() -> None:
     assert settings.worker_scheduler_tick_s == 60
 
 
-def test_env_override_mails_c09_borde() -> None:
+def test_env_override_mails_c09_borde(monkeypatch: pytest.MonkeyPatch) -> None:
     """Borde: env vars pisan defaults de C-09."""
-    os.environ["MAIL_ACTION_TTL_MIN"] = "60"
-    os.environ["MAIL_RATE_LIMIT"] = "5"
-    os.environ["API_PUBLIC_URL"] = "https://clinica.example.ar"
-    os.environ["WORKER_SCHEDULER_TICK_S"] = "30"
+    monkeypatch.setenv("MAIL_ACTION_TTL_MIN", "60")
+    monkeypatch.setenv("MAIL_RATE_LIMIT", "5")
+    monkeypatch.setenv("API_PUBLIC_URL", "https://clinica.example.ar")
+    monkeypatch.setenv("WORKER_SCHEDULER_TICK_S", "30")
     settings = Settings()
     assert settings.mail_action_ttl_min == 60
     assert settings.mail_rate_limit == 5
@@ -61,10 +64,72 @@ def test_env_override_mails_c09_borde() -> None:
     assert settings.worker_scheduler_tick_s == 30
 
 
-def test_env_override_borde() -> None:
+def test_env_override_borde(monkeypatch: pytest.MonkeyPatch) -> None:
     """Borde/error: env vars pisan defaults y secrets nunca hardcodeados en repo."""
-    os.environ["JWT_SECRET"] = "secreto-de-test-ficticio"
-    os.environ["WHATSAPP_ENABLED"] = "false"
+    monkeypatch.setenv("JWT_SECRET", "secreto-de-test-ficticio")
+    monkeypatch.setenv("WHATSAPP_ENABLED", "false")
     settings = Settings()
     assert settings.jwt_secret == "secreto-de-test-ficticio"
     assert settings.whatsapp_enabled is False
+
+
+def test_pago_modo_default_simulado_feliz() -> None:
+    """Feliz: PAGO_MODO default es 'simulado' (D14)."""
+    settings = Settings()
+    assert settings.pago_modo == "simulado"
+
+
+def test_pago_modo_mercadopago_feliz(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Feliz: PAGO_MODO='mercadopago' se resuelve desde env."""
+    monkeypatch.setenv("PAGO_MODO", "mercadopago")
+    monkeypatch.setenv("MP_ACCESS_TOKEN", "TEST-ficticio")
+    monkeypatch.setenv("MP_PUBLIC_KEY", "TEST-public-ficticio")
+    settings = Settings()
+    assert settings.pago_modo == "mercadopago"
+
+
+def test_pago_modo_mercadopago_sin_credenciales_falla_negocio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negocio P5: modo mercadopago sin MP_ACCESS_TOKEN/MP_PUBLIC_KEY falla."""
+    monkeypatch.setenv("PAGO_MODO", "mercadopago")
+    with pytest.raises(ValueError, match="MP_ACCESS_TOKEN"):
+        Settings()
+
+
+def test_pago_modo_invalido_falla_negocio(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Negocio: PAGO_MODO inválido rechaza el arranque."""
+    monkeypatch.setenv("PAGO_MODO", "efectivo")
+    with pytest.raises(ValueError, match="PAGO_MODO"):
+        Settings()
+
+
+def test_pago_modo_mercadopago_con_credenciales_feliz(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Triangulate: modo mercadopago con credenciales válidas arranca."""
+    monkeypatch.setenv("PAGO_MODO", "mercadopago")
+    monkeypatch.setenv("MP_ACCESS_TOKEN", "TEST-ficticio-token")
+    monkeypatch.setenv("MP_PUBLIC_KEY", "TEST-public-ficticio-key")
+    settings = Settings()
+    assert settings.pago_modo == "mercadopago"
+    assert settings.mp_access_token == "TEST-ficticio-token"
+    assert settings.mp_public_key == "TEST-public-ficticio-key"
+
+
+def test_mp_webhook_secret_requerido_en_produccion_negocio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negocio P5: MP_WEBHOOK_SECRET placeholder o vacío en mercadopago falla en producción."""
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("JWT_SECRET", "secreto-real-de-produccion-ficticio")
+    monkeypatch.setenv("MP_WEBHOOK_SECRET", "cambiar-en-produccion")
+    with pytest.raises(ValueError, match="MP_WEBHOOK_SECRET"):
+        Settings()
+
+    monkeypatch.setenv("MP_WEBHOOK_SECRET", "")
+    monkeypatch.setenv("PAGO_MODO", "mercadopago")
+    monkeypatch.setenv("MP_ACCESS_TOKEN", "TEST-ficticio")
+    monkeypatch.setenv("MP_PUBLIC_KEY", "TEST-public")
+    with pytest.raises(ValueError, match="MP_WEBHOOK_SECRET"):
+        Settings()

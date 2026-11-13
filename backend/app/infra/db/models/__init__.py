@@ -10,6 +10,7 @@ from app.infra.db.models.bloqueo import Bloqueo  # noqa: F401
 from app.infra.db.models.disponibilidad import Disponibilidad  # noqa: F401
 from app.infra.db.models.odontologo import Odontologo  # noqa: F401
 from app.infra.db.models.paciente import Paciente  # noqa: F401
+from app.infra.db.models.pago import EventoPago, Pago  # noqa: F401
 from app.infra.db.models.recordatorio_mail import RecordatorioMail  # noqa: F401
 from app.infra.db.models.turno import Turno, TurnoHistorial  # noqa: F401
 from app.infra.db.models.usuario import Usuario  # noqa: F401
@@ -23,10 +24,12 @@ __all__ = [
     "Base",
     "Bloqueo",
     "Disponibilidad",
+    "EventoPago",
     "ListaEspera",
     "NotificacionWhatsapp",
     "Odontologo",
     "Paciente",
+    "Pago",
     "RecordatorioMail",
     "Turno",
     "TurnoHistorial",

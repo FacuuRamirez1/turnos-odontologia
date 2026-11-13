@@ -164,3 +164,55 @@ def test_keys_distintas_mismo_slot_solo_uno_409_borde(
 
     from app.infra.db.models import Turno
     assert db_session.query(Turno).count() == 1
+
+
+def test_reserva_devuelve_checkout_url_y_token_feliz(
+    auth_client: TestClient, db_session: Session,
+) -> None:
+    """Feliz C-07: 201 con checkout_url y checkout_token de 1 uso."""
+    od_id = _sembrar_odonto(db_session)
+    _sembrar_paciente(db_session, "99999601")
+
+    r = auth_client.post(RUTA, json=_payload(od_id),
+                         headers={"Idempotency-Key": f"rk-{uuid.uuid4().hex[:12]}"})
+    assert r.status_code == 201, r.text
+    cuerpo = r.json()
+    assert cuerpo["estado"] == "creado"
+    assert "checkout_url" in cuerpo, cuerpo
+    assert "checkout_token" in cuerpo, cuerpo
+    assert cuerpo["checkout_url"].startswith("http")
+    assert cuerpo["checkout_token"].startswith("chk_")
+
+    from app.infra.db.models import EventoPago, Pago, Turno
+    turno = db_session.query(Turno).first()
+    assert turno is not None
+    assert db_session.query(Pago).filter(Pago.turno_id == turno.id).count() == 1
+    assert db_session.query(EventoPago).count() == 1
+    pago = db_session.query(Pago).first()
+    assert pago is not None
+    assert pago.estado == "pendiente"
+    assert pago.proveedor == "simulado"
+    assert pago.mp_payment_id.startswith("sim_pay_")
+
+
+def test_pago_pendiente_evento_creado_ataomicamente_negocio(
+    auth_client: TestClient, db_session: Session,
+) -> None:
+    """Negocio C-07: turno+pago+evento en la misma transacción."""
+    od_id = _sembrar_odonto(db_session)
+    _sembrar_paciente(db_session, "99999601")
+
+    r = auth_client.post(RUTA, json=_payload(od_id),
+                         headers={"Idempotency-Key": f"rk-{uuid.uuid4().hex[:12]}"})
+    assert r.status_code == 201, r.text
+
+    from app.infra.db.models import EventoPago, Pago, Turno
+    turno = db_session.query(Turno).first()
+    assert turno is not None
+    pago = db_session.query(Pago).filter(Pago.turno_id == turno.id).first()
+    assert pago is not None
+    assert pago.estado == "pendiente"
+    evento = db_session.query(EventoPago).filter(EventoPago.pago_id == pago.id).first()
+    assert evento is not None
+    assert evento.tipo_evento == "creado"
+    assert evento.actor == "sistema"

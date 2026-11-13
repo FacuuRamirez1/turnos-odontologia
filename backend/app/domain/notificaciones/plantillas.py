@@ -23,21 +23,27 @@ def _url(path: str, token: str) -> str:
     return f"{_BASE_URL}{path}?token={quote(token)}"
 
 
+def _marca_simulado() -> str:
+    return " (simulado)" if get_settings().pago_modo == "simulado" else ""
+
+
 def _render_confirmacion(
     nombre: str, apellido: str, token: str, turno_inicio: str,
 ) -> tuple[str, str, str]:
+    marca = _marca_simulado()
     asunto = f"Confirmá tu turno, {escape(nombre)}"
     link_confirmar = _url("/api/mail/confirmar", token)
     link_cancelar = _url("/api/mail/cancelar", token)
     texto = (
         f"Hola {escape(nombre)} {escape(apellido)}.\n"
-        f"Tu turno está confirmado para el {escape(turno_inicio)}.\n"
+        f"Tu turno está confirmado para el {escape(turno_inicio)}{marca}.\n"
         f"Confirmar: {link_confirmar}\n"
         f"Cancelar: {link_cancelar}\n"
     )
     html = (
         f"<p>Hola {escape(nombre)} {escape(apellido)},</p>"
-        f"<p>Tu turno está confirmado para el <strong>{escape(turno_inicio)}</strong>.</p>"
+        f"<p>Tu turno está confirmado para el "
+        f"<strong>{escape(turno_inicio)}</strong>{escape(marca)}.</p>"
         f'<p><a href="{escape(link_confirmar, quote=True)}">Confirmar turno</a> | '
         f'<a href="{escape(link_cancelar, quote=True)}">Cancelar turno</a></p>'
     )
@@ -68,17 +74,19 @@ def _render_recordatorio(
 def _render_aviso_devolucion(
     nombre: str, apellido: str, porcentaje: int, turno_inicio: str,
 ) -> tuple[str, str, str]:
+    marca = _marca_simulado()
     asunto = f"Aviso de devolución — turno del {escape(turno_inicio)}"
     texto = (
         f"Hola {escape(nombre)} {escape(apellido)}.\n"
         f"Se canceló tu turno del {escape(turno_inicio)}.\n"
-        f"Porcentaje de devolución de la seña: {porcentaje} %.\n"
+        f"Porcentaje de devolución de la seña{marca}: {porcentaje} %.\n"
         f"(La devolución se gestiona por la administración; este mail es solo aviso.)\n"
     )
     html = (
         f"<p>Hola {escape(nombre)} {escape(apellido)},</p>"
         f"<p>Se canceló tu turno del <strong>{escape(turno_inicio)}</strong>.</p>"
-        f"<p>Porcentaje de devolución de la seña: <strong>{porcentaje} %</strong>.</p>"
+        f"<p>Porcentaje de devolución de la seña{escape(marca)}: "
+        f"<strong>{porcentaje} %</strong>.</p>"
         f"<p>La devolución se gestiona por la administración; este mail es solo aviso.</p>"
     )
     return asunto, texto, html

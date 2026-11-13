@@ -25,6 +25,22 @@ jobs:
         run: mypy app
       - name: Pytest
         run: pytest -q
+      - name: Guard P15 (prohibido PAGO_MODO=simulado en production)
+        env:
+          ENVIRONMENT: production
+          JWT_SECRET: ci-secret-real-ficticio
+          MP_WEBHOOK_SECRET: ci-webhook-real-ficticio
+          PAGO_MODO: simulado
+        run: |
+          python - <<'EOF'
+          from app.main import verificar_guard_produccion
+          try:
+              verificar_guard_produccion()
+          except ValueError as exc:
+              assert "P15" in str(exc)
+          else:
+              raise SystemExit("Guard P15 no bloqueó PAGO_MODO=simulado en production")
+          EOF
 
   frontend:
     name: frontend (tsc + eslint + build)

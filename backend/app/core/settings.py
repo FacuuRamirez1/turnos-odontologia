@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     redis_url: str = Field(default="redis://localhost:6379/0", alias="REDIS_URL")
     jwt_secret: str = Field(default="cambiar-en-produccion", alias="JWT_SECRET")
     mp_access_token: str = Field(default="", alias="MP_ACCESS_TOKEN")
+    mp_public_key: str = Field(default="", alias="MP_PUBLIC_KEY")
     mp_webhook_secret: str = Field(default="", alias="MP_WEBHOOK_SECRET")
+    pago_modo: str = Field(default="simulado", alias="PAGO_MODO")
     smtp_host: str = Field(default="localhost", alias="SMTP_HOST")
     smtp_port: int = Field(default=1025, alias="SMTP_PORT")
     smtp_user: str = Field(default="", alias="SMTP_USER")
@@ -53,12 +55,26 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _rechazar_secreto_debil_en_produccion(self) -> Self:
-        """P5: en producción no se firma con vacío ni con el placeholder de ejemplo."""
+        """P5: en producción no se firma con vacío ni con placeholder de ejemplo."""
         if self.environment == "production" and self.jwt_secret in (
             "",
             "cambiar-en-produccion",
         ):
             raise ValueError("JWT_SECRET debe ser un secreto real en producción (P5).")
+        if self.environment == "production" and (
+            self.mp_webhook_secret in ("cambiar-en-produccion", "cambiar-en-dev")
+            or (self.pago_modo == "mercadopago" and self.mp_webhook_secret == "")
+        ):
+            raise ValueError("MP_WEBHOOK_SECRET debe ser un secreto real en producción (P5).")
+        # P5: PAGO_MODO válido.
+        if self.pago_modo not in ("simulado", "mercadopago"):
+            raise ValueError("PAGO_MODO debe ser 'simulado' o 'mercadopago' (P5).")
+        # P5: credenciales MP requeridas solo con PAGO_MODO=mercadopago.
+        if self.pago_modo == "mercadopago":
+            if not self.mp_access_token:
+                raise ValueError("MP_ACCESS_TOKEN requerida con PAGO_MODO=mercadopago (P5).")
+            if not self.mp_public_key:
+                raise ValueError("MP_PUBLIC_KEY requerida con PAGO_MODO=mercadopago (P5).")
         return self
 
     @property

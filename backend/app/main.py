@@ -15,6 +15,7 @@ from app.api.mail import router as mail_router
 from app.api.mis_turnos import router as mis_turnos_router
 from app.api.odontologos import router as odontologos_router
 from app.api.pacientes import router as pacientes_router
+from app.api.pagos import router as pagos_router
 from app.api.public_disponibilidad import router as publica_disponibilidad_router
 from app.api.reservas import router as reservas_router
 from app.core.errors import (
@@ -23,10 +24,24 @@ from app.core.errors import (
     logging_middleware,
     not_found_handler,
 )
+from app.core.settings import Settings, get_settings
 
 logging.basicConfig(level=logging.INFO)
 
+
+def verificar_guard_produccion(settings: Settings | None = None) -> None:
+    """P15: modo simulado prohibido en producción."""
+    cfg = settings or get_settings()
+    if cfg.environment == "production" and cfg.pago_modo == "simulado":
+        raise ValueError(
+            "P15: PAGO_MODO=simulado prohibido en ENVIRONMENT=production"
+        )
+
+
 app = FastAPI(title="Turnos Odontología", version="0.1.0")
+
+# --- P15: guard de arranque — modo simulado prohibido en producción ---
+verificar_guard_produccion()
 
 app.middleware("http")(logging_middleware)
 app.include_router(health_router, prefix="/api")
@@ -34,6 +49,7 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(disponibilidad_router, prefix="/api")
 app.include_router(odontologos_router, prefix="/api")
 app.include_router(pacientes_router, prefix="/api")
+app.include_router(pagos_router, prefix="/api")
 app.include_router(publica_disponibilidad_router, prefix="/api")
 app.include_router(reservas_router, prefix="/api")
 app.include_router(agenda_router, prefix="/api")
