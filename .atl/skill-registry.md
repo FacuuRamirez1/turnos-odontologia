@@ -23,6 +23,7 @@ Scope note (project decision): skills live at PROJECT level, not global. Canonic
 | "openspec propose / opsx propose" — new change with proposal + specs + design + tasks in one step | openspec-propose | .agents/skills/openspec-propose/SKILL.md (dup: .opencode/skills/openspec-propose/SKILL.md) |
 | "openspec sync / opsx sync" — sync delta specs to main specs without archiving | openspec-sync-specs | .agents/skills/openspec-sync-specs/SKILL.md (dup: .opencode/skills/openspec-sync-specs/SKILL.md) |
 | "openspec update change / opsx update" — revise a change's planning artifacts, never edits code | openspec-update-change | .agents/skills/openspec-update-change/SKILL.md (dup: .opencode/skills/openspec-update-change/SKILL.md) |
+| Validar escenarios SDD de turnos contra reglas de negocio (pagos simulados, expiración de slots, superposición) | validador-escenarios-turnos | .agents/skills/validador-escenarios-turnos/SKILL.md |
 
 ## Compact Rules
 
@@ -140,6 +141,15 @@ Pre-digested rules per skill. Delegators copy matching blocks into sub-agent pro
 - Revise EXISTING planning artifacts, keep them coherent; NEVER edits code; never creates missing artifacts (status names the next one).
 - Same store-selection + project-check + input/change-selection rules as other openspec skills.
 - Do not confuse with `openspec update` CLI (refreshes generated files) — if user means the CLI, run that instead.
+
+### validador-escenarios-turnos
+- Valida escenarios SDD de turnos (C-10 frontend-reserva-publica) contra reglas de negocio del dominio odontológico.
+- Requiere acceso a `knowledge-base/` (05 reglas, 04 datos, 07 flujos, 06 funciones, 10 abiertas, 11 pagos).
+- No escribe código ni modifica implementación; solo valida y reporta ✅ Aprobado o ❌ Reglas vulneradas.
+- Verifica que existan los 3 escenarios obligatorios: feliz, error de negocio, caso borde.
+- Verifica cumplimiento de RN-DOBLE, RN-SOLAPE, RN-LIBERACION, RN-PASADO, RN-ANTICIPACION, RN-SENIA-PAGO, RN-PAGO-SIMULADO, RN-ESTADOS, RN-CONSENTIMIENTO.
+- Requiere `PAGO_MODO=simulado` y marca "(simulado)" en UI; frontend nunca confirma pagos (solo webhook o adaptador simulado).
+- Reporta ambigüedades pendientes (Q1, Q3, Q4) sin resolverlas.
 
 ## Project Conventions
 
