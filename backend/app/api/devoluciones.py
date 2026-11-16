@@ -18,7 +18,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.api.pagos import procesar_webhook
-from app.core.security.dependencies import Identity, require_role
+from app.core.security.dependencies import (
+    Identity,
+    require_role,
+    scoped_odontologo_id,
+)
 from app.domain.devoluciones.estados import (
     TransicionDevolucionInvalida,
     validar_transicion,
@@ -105,6 +109,72 @@ def listar_devoluciones(
     """Lista devoluciones visibles para el rol, filtrables por estado (P8)."""
     repo = DevolucionRepository.scoped(db, ident)
     return [_out(d) for d in repo.list(estado)]
+
+
+class AlertaConciliacionOut(BaseModel):
+    """Alerta de conciliación (`evento_pago(conciliado)`) — P2 + marca (P15)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    pago_id: uuid.UUID
+    turno_id: uuid.UUID
+    tipo: str
+    detalle: str | None
+    estado_pago: str | None
+    estado_esperado: str | None
+    estado_turno: str | None
+    discrepancia: bool
+    actor: str
+    fecha: datetime
+    marca: str
+
+
+def _texto_opcional(valor: object) -> str | None:
+    return str(valor) if valor is not None else None
+
+
+# NOTA: declarada ANTES de `/{devolucion_id}` para que "alertas" no se
+# interprete como UUID y colisione con el detalle (FastAPI matchea por orden).
+@router.get("/alertas", response_model=list[AlertaConciliacionOut])
+def listar_alertas(
+    ident: Identity = Depends(STAFF),
+    db: Session = Depends(get_db),
+) -> list[AlertaConciliacionOut]:
+    """Alertas de conciliación visibles para el rol (D9, P8), con marca (P15)."""
+    consulta = (
+        db.query(EventoPago, Pago)
+        .join(Pago, Pago.id == EventoPago.pago_id)
+        .filter(EventoPago.tipo_evento == "conciliado", Pago.is_active.is_(True))
+    )
+    if ident.rol == "odontologo":
+        consulta = consulta.filter(
+            Pago.odontologo_id == scoped_odontologo_id(ident)
+        )
+    filas = consulta.order_by(EventoPago.created_at, EventoPago.id).all()
+
+    alertas: list[AlertaConciliacionOut] = []
+    for evento, pago in filas:
+        payload = evento.payload_json if isinstance(evento.payload_json, dict) else {}
+        if payload.get("discrepancia") is not True:
+            continue
+        alertas.append(
+            AlertaConciliacionOut(
+                id=uuid.UUID(str(evento.id)),
+                pago_id=uuid.UUID(str(pago.id)),
+                turno_id=uuid.UUID(str(pago.turno_id)),
+                tipo=str(payload.get("tipo", "pago")),
+                detalle=_texto_opcional(payload.get("detalle")),
+                estado_pago=_texto_opcional(payload.get("estado_pago")),
+                estado_esperado=_texto_opcional(payload.get("estado_esperado")),
+                estado_turno=_texto_opcional(payload.get("estado_turno")),
+                discrepancia=True,
+                actor=str(evento.actor),
+                fecha=evento.created_at,
+                marca=marca_pago_actual(),
+            )
+        )
+    return alertas
 
 
 @router.get("/{devolucion_id}", response_model=DevolucionOut)

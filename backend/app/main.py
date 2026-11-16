@@ -20,6 +20,7 @@ from app.api.pacientes import router as pacientes_router
 from app.api.pagos import router as pagos_router
 from app.api.public_disponibilidad import router as publica_disponibilidad_router
 from app.api.reservas import router as reservas_router
+from app.api.turnos import router as turnos_router
 from app.core.errors import (
     ErrorEnvelope,
     internal_error_handler,
@@ -56,6 +57,7 @@ app.include_router(devoluciones_router, prefix="/api")
 app.include_router(comprobantes_router, prefix="/api")
 app.include_router(publica_disponibilidad_router, prefix="/api")
 app.include_router(reservas_router, prefix="/api")
+app.include_router(turnos_router, prefix="/api")
 app.include_router(agenda_router, prefix="/api")
 app.include_router(mis_turnos_router, prefix="/api")
 app.include_router(mail_router, prefix="/api")

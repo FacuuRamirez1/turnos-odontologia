@@ -51,9 +51,9 @@
 
 ## 7. Trazabilidad, conciliación y alertas
 
-- [ ] 7.1 `GET /api/turnos/{turno_id}/trazabilidad` (scope P8): turno devuelto con pago, devolución, ambos recibos y eventos ordenados con actor y fecha (feliz), odontólogo ajeno → 403 (error), turno sin pago → secciones vacías explícitas (borde)
-- [ ] 7.2 Conciliación con reembolsos (design D9) en `test_pagos_conciliacion.py`: pago `reembolsado_*` consistente sin alerta (feliz), pago `aprobado` de turno `cancelado`/`no_show` con 0 % sin devolución → sin alerta, discrepancia de pago sigue generando `conciliado` (error), devolución `ejecutada` con pago `aprobado` o turno no `devuelto` → alerta (borde)
-- [ ] 7.3 `GET /api/devoluciones/alertas` con scope P8 y "(simulado)": recepcionista y odontólogo dueño ven la alerta, odontólogo ajeno no; sin JWT → 401; sin discrepancias → lista vacía
+- [x] 7.1 `GET /api/turnos/{turno_id}/trazabilidad` (scope P8): turno devuelto con pago, devolución, ambos recibos y eventos ordenados con actor y fecha (feliz), odontólogo ajeno → 403 (error), turno sin pago → secciones vacías explícitas (borde)
+- [x] 7.2 Conciliación con reembolsos (design D9) en `test_pagos_conciliacion.py`: pago `reembolsado_*` consistente sin alerta (feliz), pago `aprobado` de turno `cancelado`/`no_show` con 0 % sin devolución → sin alerta, discrepancia de pago sigue generando `conciliado` (error), devolución `ejecutada` con pago `aprobado` o turno no `devuelto` → alerta (borde)
+- [x] 7.3 `GET /api/devoluciones/alertas` con scope P8 y "(simulado)": recepcionista y odontólogo dueño ven la alerta, odontólogo ajeno no; sin JWT → 401; sin discrepancias → lista vacía
 
 ## 8. Seed y verificación integral
 
