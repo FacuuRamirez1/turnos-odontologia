@@ -289,9 +289,9 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ### [C-08] `devoluciones-comprobantes-conciliacion`
 - **Estado**: `[ ]` pendiente
 - **Scope**: Bandeja de devoluciones **completa** + recibos internos + trazabilidad navegable (épicas D2–D4, F2); en MVP la ejecución la hace el adaptador simulado (D14)
-  - Modelos: `Devolucion` (`pago_id, turno_id, monto, porcentaje 100|60|0, motivo, estado pendiente|aprobada|rechazada|ejecutada, aprobada_por/at, mp_refund_id` sintético `sim_refund_<uuid>` si simulado); `Comprobante` separado (D13, `tipo=recibo_interno`, flag/leyenda `simulado`, campos ARCA `cae` columnados apagados)
+  - Modelos: `Devolucion` (`pago_id, turno_id, monto, porcentaje 100|60, motivo, estado pendiente|aprobada|rechazada|ejecutada, aprobada_por/at, mp_refund_id` sintético `sim_refund_<uuid>` si simulado); `Comprobante` separado (D13, `tipo=recibo_interno`, flag/leyenda `simulado`, campos ARCA `cae` columnados apagados)
   - Migración **006**: tablas devolucion + comprobante
-  - Cálculo 100/60/0 (RN-SENIA-*) registrado en `devolucion.porcentaje`; ejecución vía el puerto de pagos con `idempotency_key`: el adaptador simulado genera `sim_refund_<uuid>` y registra `evento_pago(devolucion_ejecutada)` **sin mover dinero**; reintentos consultan antes de re-ejecutar
+  - Cálculo 100/60/0 (RN-SENIA-*); solo 100 y 60 se registran en `devolucion.porcentaje` (con 0 % no se crea devolución y el turno queda `cancelado`); ejecución vía el puerto de pagos con `idempotency_key`: el adaptador simulado genera `sim_refund_<uuid>` y registra `evento_pago(devolucion_ejecutada)` **sin mover dinero**; reintentos consultan antes de re-ejecutar
   - Bandeja: aprobar/rechazar/ejecutar con actor+fecha+monto (RBAC: odontólogo las de sus turnos, recepcionista todas); `cancelado→devuelto` tras ejecución; recibo interno PDF por pago aprobado y por devolución ejecutada con leyenda visible "SIMULADO — sin valor fiscal ni movimiento de dinero"
   - `aviso_devolucion` (mail, productor real para C-09) con marca "(simulado)" cuando `PAGO_MODO=simulado`, para no prometer devoluciones reales
   - Trazabilidad turno↔pago↔devolución↔comprobante navegable (base para C-11/C-12)

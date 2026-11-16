@@ -45,6 +45,7 @@ TIPOS_EVENTO_PAGO = (
     "rechazado",
     "devolucion_solicitada",
     "devolucion_aprobada",
+    "devolucion_rechazada",
     "devolucion_ejecutada",
     "conciliado",
 )
@@ -126,7 +127,8 @@ class EventoPago(Base):
         ),
         CheckConstraint(
             "tipo_evento IN ('creado', 'webhook_recibido', 'aprobado', 'rechazado', "
-            "'devolucion_solicitada', 'devolucion_aprobada', 'devolucion_ejecutada', 'conciliado')",
+            "'devolucion_solicitada', 'devolucion_aprobada', 'devolucion_rechazada', "
+            "'devolucion_ejecutada', 'conciliado')",
             name="ck_evento_pago_tipo_cerrado",
         ),
     )

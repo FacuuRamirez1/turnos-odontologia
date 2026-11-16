@@ -33,7 +33,7 @@ Código: **RN-XX**. Todas **[v1]** salvo marca explícita.
 
 ```
 creado → confirmado → atendido
-   │          ├──→ cancelado → devuelto (100/60/0 según RN-SENIA-*)
+   │          ├──→ cancelado → devuelto (100/60 según RN-SENIA-*; con 0 % no hay devolución y el turno queda cancelado)
    │          ├──→ reprogramado → confirmado (nuevo slot)
    │          └──→ no_show (0 %)
 ```
