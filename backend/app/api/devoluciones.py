@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.api.pagos import procesar_webhook
 from app.core.security.dependencies import Identity, require_role
 from app.domain.devoluciones.estados import (
     TransicionDevolucionInvalida,
@@ -26,9 +27,9 @@ from app.domain.devoluciones.repositories import (
     DevolucionFueraDeScope,
     DevolucionRepository,
 )
-from app.domain.pagos.service import marca_pago_actual
+from app.domain.pagos.service import get_proveedor_pago, marca_pago_actual
 from app.infra.db.models import Devolucion
-from app.infra.db.models.pago import EventoPago
+from app.infra.db.models.pago import EventoPago, Pago
 from app.infra.db.session import get_db
 
 router = APIRouter(prefix="/devoluciones", tags=["devoluciones"])
@@ -73,11 +74,18 @@ def _out(devolucion: Devolucion) -> DevolucionOut:
 
 
 def _devolucion_visible(
-    repo: DevolucionRepository, devolucion_id: uuid.UUID
+    repo: DevolucionRepository,
+    devolucion_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> Devolucion:
     """Resuelve la devolución dentro del scope: ajena → 403, inexistente → 404."""
     try:
-        devolucion = repo.get(devolucion_id)
+        devolucion = (
+            repo.get_for_update(devolucion_id)
+            if for_update
+            else repo.get(devolucion_id)
+        )
     except DevolucionFueraDeScope as exc:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "devolución de otro profesional"
@@ -236,3 +244,109 @@ def rechazar_devolucion(
     db.commit()
     db.refresh(devolucion)
     return _out(devolucion)
+
+
+class EjecutarOut(BaseModel):
+    """Resultado de ejecutar la devolución — P2 `extra='forbid'` + marca (P15)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    estado: str
+    monto: float
+    porcentaje: int
+    mp_refund_id: str
+    pago_estado: str
+    marca: str
+
+
+def _ejecutar_out(db: Session, devolucion: Devolucion) -> EjecutarOut:
+    pago = db.get(Pago, devolucion.pago_id)
+    return EjecutarOut(
+        id=uuid.UUID(str(devolucion.id)),
+        estado=str(devolucion.estado),
+        monto=float(devolucion.monto),
+        porcentaje=int(devolucion.porcentaje),
+        mp_refund_id=str(devolucion.mp_refund_id or ""),
+        pago_estado=str(pago.estado) if pago is not None else "",
+        marca=marca_pago_actual(),
+    )
+
+
+@router.post("/{devolucion_id}/ejecutar", response_model=EjecutarOut)
+def ejecutar_devolucion(
+    devolucion_id: uuid.UUID,
+    ident: Identity = Depends(STAFF),
+    db: Session = Depends(get_db),
+) -> EjecutarOut | JSONResponse:
+    """`aprobada→ejecutada` por el puerto y el MISMO handler del webhook (D4).
+
+    1. `SELECT … FOR UPDATE` + scope P8 (ajena → 403 antes del proveedor).
+    2. `ejecutada` → idempotente (mismo `mp_refund_id`, sin segundo evento).
+    3. `ejecutada_por/at` se registran ANTES de llamar al proveedor.
+    4. Consulta la key y solo ejecuta si no existe (P4).
+    5. El evento firmado entra por `procesar_webhook`: solo el handler marca
+       `ejecutada`, ajusta el pago y transiciona el turno (P10).
+    6. `PAGO_MODO=mercadopago` (no construido) → 503 sin fallback simulado
+       (P13/P15); la devolución queda `aprobada`.
+    """
+    repo = DevolucionRepository.scoped(db, ident)
+    devolucion = _devolucion_visible(repo, devolucion_id, for_update=True)
+
+    if str(devolucion.estado) == "ejecutada":
+        return _ejecutar_out(db, devolucion)
+
+    try:
+        validar_transicion(str(devolucion.estado), "ejecutada")
+    except TransicionDevolucionInvalida as exc:
+        return JSONResponse(
+            status_code=409,
+            content={"code": "TRANSICION_DEVOLUCION_INVALIDA", "detail": str(exc)},
+        )
+
+    pago = db.get(Pago, devolucion.pago_id)
+    if pago is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "pago inexistente")
+
+    devolucion.ejecutada_por = uuid.UUID(ident.sub)
+    devolucion.ejecutada_at = datetime.now(UTC)
+    db.add(devolucion)
+    db.flush()
+
+    try:
+        proveedor = get_proveedor_pago()
+    except NotImplementedError:
+        db.rollback()
+        return JSONResponse(
+            status_code=503,
+            content={
+                "code": "PROVEEDOR_NO_DISPONIBLE",
+                "detail": "PAGO_MODO=mercadopago no construido en v1 (P15)",
+            },
+        )
+
+    clave = str(devolucion.idempotency_key)
+    evento = proveedor.consultar_devolucion(clave)
+    if evento is None:
+        evento = proveedor.ejecutar_devolucion(
+            idempotency_key=clave,
+            mp_payment_id=str(pago.mp_payment_id),
+            monto=Decimal(str(devolucion.monto)),
+        )
+
+    resultado = procesar_webhook(
+        db, str(evento["payload"]), str(evento["firma"]), actor="sistema",
+    )
+    db.commit()
+
+    error = str(resultado.get("error", ""))
+    if error:
+        if error in ("pago_no_encontrado", "devolucion_no_encontrada"):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, error)
+        return JSONResponse(
+            status_code=409,
+            content={"code": "EJECUCION_RECHAZADA", "detail": error},
+        )
+
+    db.refresh(devolucion)
+    return _ejecutar_out(db, devolucion)

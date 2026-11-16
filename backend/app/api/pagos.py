@@ -17,6 +17,7 @@ import hmac
 import json as _json
 import uuid
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
@@ -33,7 +34,8 @@ from app.domain.pagos.service import (
     leyenda_comprobante_actual,
     marca_pago_actual,
 )
-from app.infra.db.models import Turno, TurnoHistorial
+from app.domain.turnos.estados import transition
+from app.infra.db.models import Devolucion, Turno, TurnoHistorial
 from app.infra.db.models.pago import EventoPago, Pago
 from app.infra.db.session import get_db
 from app.infra.redis.rate_limit import LoginRateLimiter, build_rate_limiter
@@ -131,6 +133,7 @@ def _procesar_webhook_pago(
     estado_interno: str,
     payload_crudo: str,
     actor: str = "sistema",
+    kind: str = "pago",
 ) -> dict[str, object]:
     """Procesa un webhook de pago: idempotencia, evento, transición turno.
 
@@ -140,27 +143,33 @@ def _procesar_webhook_pago(
     if pago is None:
         return {"error": "pago_no_encontrado", "mp_payment_id": mp_payment_id}
 
-    existente = (
+    previos = (
         db.query(EventoPago)
         .filter(
             EventoPago.pago_id == pago.id,
             EventoPago.tipo_evento == "webhook_recibido",
         )
-        .first()
+        .all()
     )
-    if existente is not None:
-        return {
-            "pago": pago,
-            "turno": None,
-            "transicionado": False,
-            "idempotente": True,
-        }
+    for previo in previos:
+        datos = previo.payload_json or {}
+        if (
+            str(datos.get("kind", "pago")) == "pago"
+            and str(datos.get("mp_payment_id", "")) == str(mp_payment_id)
+        ):
+            return {
+                "pago": pago,
+                "turno": None,
+                "transicionado": False,
+                "idempotente": True,
+            }
 
     evento_repo = EventoPagoRepository(db)
     evento_repo.add_evento(
         pago_id=pago.id,
         tipo_evento="webhook_recibido",
         payload_json={
+            "kind": kind,
             "mp_payment_id": mp_payment_id,
             "status": estado_interno,
             "payload_crudo": payload_crudo,
@@ -218,6 +227,203 @@ def _procesar_webhook_pago(
         "transicionado": transicionado,
         "pago_estado_anterior": pago_estado_anterior,
     }
+
+
+def _procesar_webhook_devolucion(
+    db: Session,
+    datos: dict[str, str],
+    payload_crudo: str,
+    actor: str = "sistema",
+) -> dict[str, object]:
+    """Rama devolución del webhook (D4/D5): solo `aprobada` se ejecuta.
+
+    - Replay: si la devolución ya está `ejecutada` con el mismo `mp_refund_id`,
+      no hace nada (idempotente, P4).
+    - Devolución no `aprobada`: persiste el payload crudo para auditoría y
+      responde error explícito SIN efectos (borde de la spec).
+    - Efectos en la misma transacción: devolución `ejecutada` + `mp_refund_id`,
+      pago `reembolsado_total|parcial` (monto original intacto),
+      `evento_pago(devolucion_ejecutada, actor=sistema, solicitado_por)` y
+      `transition(cancelado→devuelto, sistema)` con historial (P9).
+    """
+    mp_refund_id = str(datos.get("mp_refund_id", ""))
+    mp_payment_id = str(datos.get("mp_payment_id", ""))
+    pago = db.query(Pago).filter(Pago.mp_payment_id == mp_payment_id).first()
+    if pago is None:
+        return {
+            "error": "pago_no_encontrado",
+            "kind": "devolucion",
+            "mp_refund_id": mp_refund_id,
+            "mp_payment_id": mp_payment_id,
+        }
+
+    devolucion = (
+        db.query(Devolucion)
+        .filter(Devolucion.pago_id == pago.id, Devolucion.is_active.is_(True))
+        .first()
+    )
+    if devolucion is None:
+        return {
+            "error": "devolucion_no_encontrada",
+            "kind": "devolucion",
+            "mp_refund_id": mp_refund_id,
+            "pago": pago,
+        }
+
+    if str(devolucion.estado) == "ejecutada":
+        if str(devolucion.mp_refund_id) == mp_refund_id:
+            return {
+                "pago": pago,
+                "devolucion": devolucion,
+                "turno": None,
+                "ejecutada": False,
+                "transicionado": False,
+                "idempotente": True,
+                "kind": "devolucion",
+            }
+        return {
+            "error": "mp_refund_distinto",
+            "kind": "devolucion",
+            "mp_refund_id": mp_refund_id,
+            "devolucion": devolucion,
+            "pago": pago,
+        }
+
+    EventoPagoRepository(db).add_evento(
+        pago_id=pago.id,
+        tipo_evento="webhook_recibido",
+        payload_json={
+            "kind": "devolucion",
+            "mp_payment_id": mp_payment_id,
+            "mp_refund_id": mp_refund_id,
+            "status": str(datos.get("status", "refunded")),
+            "payload_crudo": payload_crudo,
+        },
+        actor=actor,
+    )
+
+    if str(devolucion.estado) != "aprobada":
+        return {
+            "error": "devolucion_no_aprobada",
+            "kind": "devolucion",
+            "mp_refund_id": mp_refund_id,
+            "devolucion": devolucion,
+            "pago": pago,
+        }
+
+    if devolucion.ejecutada_por is None or devolucion.ejecutada_at is None:
+        return {
+            "error": "devolucion_sin_solicitante",
+            "kind": "devolucion",
+            "mp_refund_id": mp_refund_id,
+            "devolucion": devolucion,
+            "pago": pago,
+        }
+
+    turno_id_val: object = devolucion.turno_id
+    if isinstance(turno_id_val, str):
+        turno_id_val = uuid.UUID(turno_id_val)
+    turno = db.get(Turno, turno_id_val)
+    if turno is None or str(turno.estado) != "cancelado":
+        return {
+            "error": "turno_no_cancelado",
+            "kind": "devolucion",
+            "mp_refund_id": mp_refund_id,
+            "devolucion": devolucion,
+            "pago": pago,
+        }
+
+    monto_devolucion = Decimal(str(devolucion.monto))
+    monto_pago = Decimal(str(pago.monto))
+    devolucion.estado = "ejecutada"
+    devolucion.mp_refund_id = mp_refund_id
+    db.add(devolucion)
+    pago.estado = (
+        "reembolsado_total"
+        if monto_devolucion == monto_pago
+        else "reembolsado_parcial"
+    )
+    db.add(pago)
+
+    solicitado_por = str(devolucion.ejecutada_por)
+    EventoPagoRepository(db).add_evento(
+        pago_id=pago.id,
+        tipo_evento="devolucion_ejecutada",
+        payload_json={
+            "solicitado_por": solicitado_por,
+            "monto": str(monto_devolucion),
+            "porcentaje": int(devolucion.porcentaje),
+            "mp_refund_id": mp_refund_id,
+        },
+        actor="sistema",
+    )
+
+    turno = transition(
+        db,
+        uuid.UUID(str(turno.id)),
+        "devuelto",
+        actor_tipo="sistema",
+        actor_id="sistema",
+        motivo=f"devolución {mp_refund_id} ejecutada",
+    )
+
+    return {
+        "pago": pago,
+        "devolucion": devolucion,
+        "turno": turno,
+        "ejecutada": True,
+        "transicionado": True,
+        "kind": "devolucion",
+        "mp_refund_id": mp_refund_id,
+    }
+
+
+def _parsear_payload(payload_crudo: str) -> dict[str, str] | None:
+    """Acepta JSON (MP/webhook público) o `k=v&k=v` (adaptador simulado)."""
+    try:
+        cargado = _json.loads(payload_crudo)
+    except (_json.JSONDecodeError, ValueError):
+        cargado = None
+    if isinstance(cargado, dict):
+        return {str(k): str(v) for k, v in cargado.items()}
+    if "=" not in payload_crudo:
+        return None
+    partes: dict[str, str] = {}
+    for parte in payload_crudo.split("&"):
+        clave, _, valor = parte.partition("=")
+        if clave:
+            partes[clave] = valor
+    return partes
+
+
+def procesar_webhook(
+    db: Session, payload_crudo: str, firma: str, actor: str = "sistema",
+) -> dict[str, object]:
+    """Pipeline compartido del webhook (P10): firma → payload crudo → rama.
+
+    Lo usan `POST /webhooks/mercadopago` y la ejecución de devoluciones, así
+    la firma HMAC y la idempotencia son idénticas en ambos caminos.
+    """
+    settings = get_settings()
+    if not firma:
+        return {"error": "FIRMA_REQUERIDA"}
+    if not _validar_firma_webhook(payload_crudo, firma, settings.mp_webhook_secret):
+        return {"error": "FIRMA_INVALIDA"}
+    datos = _parsear_payload(payload_crudo)
+    if datos is None:
+        return {"error": "PAYLOAD_INVALIDO"}
+
+    if str(datos.get("kind", "pago")) == "devolucion":
+        return _procesar_webhook_devolucion(db, datos, payload_crudo, actor)
+
+    mp_payment_id = str(datos.get("mp_payment_id", ""))
+    estado_interno = _extraer_estado_mp(str(datos.get("status", "aprobado")))
+    resultado = _procesar_webhook_pago(
+        db, mp_payment_id, estado_interno, payload_crudo, actor=actor,
+    )
+    resultado["mp_payment_id"] = mp_payment_id
+    resultado["estado"] = estado_interno
+    return resultado
 
 
 @router.get("/pagos/{pago_id}", response_model=PagoOut)
@@ -345,54 +551,67 @@ async def webhook_mercadopago(
     """Webhook de MercadoPago (mismo handler en modo simulado y real).
 
     Valida firma HMAC → persiste evento_pago(webhook_recibido) con payload
-    crudo → idempotencia por mp_payment_id → transita turno con actor sistema.
+    crudo → idempotencia por `mp_payment_id` (pago) o `mp_refund_id`
+    (devolución) → transita el turno con actor `sistema` (P10).
     """
-    settings = get_settings()
     body = await request.body()
     payload_str = body.decode("utf-8")
-
     firma = request.headers.get("x-signature", "")
-    if not firma:
+
+    resultado = procesar_webhook(db, payload_str, firma, actor="sistema")
+    db.commit()
+
+    error = str(resultado.get("error", ""))
+    if error == "FIRMA_REQUERIDA":
         return JSONResponse(
             status_code=401,
             content={"code": "FIRMA_REQUERIDA", "detail": "firma HMAC requerida"},
         )
-
-    if not _validar_firma_webhook(payload_str, firma, settings.mp_webhook_secret):
+    if error == "FIRMA_INVALIDA":
         return JSONResponse(
             status_code=401,
             content={"code": "FIRMA_INVALIDA", "detail": "firma HMAC no válida"},
         )
-
-    try:
-        data = _json.loads(payload_str)
-    except (_json.JSONDecodeError, ValueError):
+    if error == "PAYLOAD_INVALIDO":
         return JSONResponse(
             status_code=422,
             content={"code": "PAYLOAD_INVALIDO", "detail": "payload no es JSON válido"},
         )
-
-    mp_payment_id = str(data.get("mp_payment_id", ""))
-    status_mp = str(data.get("status", "aprobado"))
-    estado_interno = _extraer_estado_mp(status_mp)
-
-    resultado = _procesar_webhook_pago(
-        db, mp_payment_id, estado_interno, payload_str, actor="sistema"
-    )
-    db.commit()
-
-    if "error" in resultado:
+    if error == "devolucion_no_aprobada":
+        return JSONResponse(
+            status_code=409,
+            content={
+                "code": "DEVOLUCION_NO_APROBADA",
+                "detail": "la devolución no está aprobada; evento solo auditado",
+            },
+        )
+    if error == "mp_refund_distinto":
+        return JSONResponse(
+            status_code=409,
+            content={
+                "code": "MP_REFUND_DISTINTO",
+                "detail": "la devolución ya se ejecutó con otro mp_refund_id",
+            },
+        )
+    if error in ("pago_no_encontrado", "devolucion_no_encontrada"):
         return JSONResponse(
             status_code=404,
-            content={"code": "PAGO_NO_ENCONTRADO", "detail": resultado["error"]},
+            content={"code": "PAGO_NO_ENCONTRADO", "detail": error},
+        )
+    if error:
+        return JSONResponse(
+            status_code=422,
+            content={"code": "WEBHOOK_NO_PROCESABLE", "detail": error},
         )
 
     return JSONResponse(
         status_code=200,
         content={
-            "mp_payment_id": mp_payment_id,
-            "estado": estado_interno,
-            "transicionado": resultado["transicionado"],
+            "kind": resultado.get("kind", "pago"),
+            "mp_payment_id": resultado.get("mp_payment_id", ""),
+            "mp_refund_id": resultado.get("mp_refund_id"),
+            "estado": resultado.get("estado", "refunded"),
+            "transicionado": resultado.get("transicionado", False),
             "idempotente": resultado.get("idempotente", False),
             "marca": marca_pago_actual(),
         },

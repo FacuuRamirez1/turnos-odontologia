@@ -59,6 +59,7 @@ def test_devoluciones_no_publicas_p12(auth_client: TestClient) -> None:
         ("GET", f"/api/devoluciones/{dev_id}", None),
         ("POST", f"/api/devoluciones/{dev_id}/aprobar", {"monto_confirmado": "1.00"}),
         ("POST", f"/api/devoluciones/{dev_id}/rechazar", {"motivo": "x"}),
+        ("POST", f"/api/devoluciones/{dev_id}/ejecutar", None),
     ]
     for metodo, path, cuerpo in rutas:
         r = auth_client.request(metodo, path, json=cuerpo)

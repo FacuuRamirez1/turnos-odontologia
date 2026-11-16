@@ -98,6 +98,30 @@ def test_carrera_con_version_vieja_409_borde(db_session: Session) -> None:
                    version_esperada=1)
 
 
+def test_cancelado_a_devuelto_staff_403_negocio(db_session: Session) -> None:
+    """Error de negocio (C-08): solo `sistema` puede cerrar `cancelado→devuelto`."""
+    import pytest
+    from fastapi import HTTPException
+
+    from app.api.reservas import _transicion_http
+    from app.infra.db.models import Turno, TurnoHistorial
+
+    turno_id = _sembrar(db_session, "cancelado")
+    turno = db_session.get(Turno, turno_id)
+    assert turno is not None
+
+    with pytest.raises(HTTPException) as exc:
+        _transicion_http(db_session, turno, "devuelto", "recepcionista", "rec-1", None)
+
+    assert exc.value.status_code == 403
+    db_session.expire_all()
+    turno = db_session.get(Turno, turno_id)
+    assert turno is not None
+    assert str(turno.estado) == "cancelado"
+    assert db_session.query(TurnoHistorial).filter_by(
+        turno_id=turno_id, estado_nuevo="devuelto").count() == 0
+
+
 def test_confirmado_a_cancelado_sin_pago_no_crea_devolucion_borde(
     db_session: Session,
 ) -> None:

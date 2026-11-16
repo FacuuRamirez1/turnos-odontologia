@@ -8,6 +8,7 @@ corta). Al ejecutar una acción, emite un evento firmado con HMAC sobre
 """
 
 from abc import ABC, abstractmethod
+from decimal import Decimal
 from enum import StrEnum
 
 
@@ -37,4 +38,22 @@ class ProveedorPago(ABC):
         Retorna un dict con `payload` (crudo, para el webhook) y `firma`
         (HMAC-SHA256 sobre `MP_WEBHOOK_SECRET`). El evento es entregado al
         handler `POST /webhooks/mercadopago`, que valida la firma y persiste.
+        """
+
+    @abstractmethod
+    def ejecutar_devolucion(
+        self, *, idempotency_key: str, mp_payment_id: str, monto: Decimal,
+    ) -> dict[str, object]:
+        """Ejecuta (o recupera) la devolución de una `idempotency_key` (P4).
+
+        Retorna `mp_refund_id`, `status`, `payload` crudo y `firma` HMAC para
+        entrega al handler del webhook. Reintentar con la misma key devuelve
+        el mismo `mp_refund_id` sin mover dinero dos veces.
+        """
+
+    @abstractmethod
+    def consultar_devolucion(self, idempotency_key: str) -> dict[str, object] | None:
+        """Consulta una devolución ejecutada; `None` si la key nunca se ejecutó.
+
+        Nunca crea la devolución: es solo lectura (borde de idempotencia).
         """

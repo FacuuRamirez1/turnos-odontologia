@@ -7,6 +7,7 @@ Escenarios (U2 feliz / negocio / borde):
 """
 
 import uuid
+from decimal import Decimal
 
 import pytest
 
@@ -114,6 +115,67 @@ def test_proveedor_pago_puerto_define_interfaz_feliz() -> None:
     """Feliz: ProveedorPago es un puerto (interfaz) con los métodos esperados."""
     assert hasattr(ProveedorPago, "generar_checkout")
     assert hasattr(ProveedorPago, "ejecutar_accion")
+    assert hasattr(ProveedorPago, "ejecutar_devolucion")
+    assert hasattr(ProveedorPago, "consultar_devolucion")
     assert hasattr(TipoAccionPago, "APROBAR")
     assert hasattr(TipoAccionPago, "RECHAZAR")
     assert hasattr(TipoAccionPago, "EXPIRAR")
+
+
+def _ejecutar_devolucion(adapter: PagoSimuladoAdapter, key: str) -> dict[str, object]:
+    return adapter.ejecutar_devolucion(
+        idempotency_key=key,
+        mp_payment_id="sim_pay_ficticio",
+        monto=Decimal("6000.00"),
+    )
+
+
+def test_devolucion_simulada_misma_key_mismo_id_feliz() -> None:
+    """Feliz: misma idempotency_key → mismo mp_refund_id sin mover dinero."""
+    adapter = PagoSimuladoAdapter(webhook_secret="secreto-de-test-ficticio")
+
+    evento1 = _ejecutar_devolucion(adapter, "dev_pago-ficticio")
+    evento2 = _ejecutar_devolucion(adapter, "dev_pago-ficticio")
+
+    refund_id = evento1["mp_refund_id"]
+    assert isinstance(refund_id, str)
+    assert refund_id.startswith("sim_refund_")
+    assert evento2["mp_refund_id"] == refund_id
+    assert evento2["payload"] == evento1["payload"]
+    assert evento1["status"] == "refunded"
+    assert "kind=devolucion" in str(evento1["payload"])
+
+    consulta = adapter.consultar_devolucion("dev_pago-ficticio")
+    assert consulta is not None
+    assert consulta["mp_refund_id"] == refund_id
+
+
+def test_consulta_devolucion_inexistente_no_la_crea_borde() -> None:
+    """Borde: consultar una key nunca ejecutada → no existe y no se persiste."""
+    adapter = PagoSimuladoAdapter(webhook_secret="secreto-de-test-ficticio")
+
+    assert adapter.consultar_devolucion("dev_nunca_ejecutada") is None
+    assert adapter.consultar_devolucion("dev_nunca_ejecutada") is None
+
+    _ejecutar_devolucion(adapter, "dev_otra_pago")
+    assert adapter.consultar_devolucion("dev_nunca_ejecutada") is None
+
+
+def test_devolucion_firma_invalida_detectada_negocio() -> None:
+    """Error: la firma HMAC del evento de devolución se detecta al verificarla."""
+    import hashlib
+    import hmac
+
+    adapter = PagoSimuladoAdapter(webhook_secret="secreto-de-test-ficticio")
+    evento = _ejecutar_devolucion(adapter, "dev_firma")
+
+    payload = str(evento["payload"])
+    esperada = hmac.new(
+        b"secreto-de-test-ficticio", payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    assert evento["firma"] == esperada
+
+    otra = hmac.new(
+        b"otro-secreto", payload.encode("utf-8"), hashlib.sha256
+    ).hexdigest()
+    assert not hmac.compare_digest(str(evento["firma"]), otra)

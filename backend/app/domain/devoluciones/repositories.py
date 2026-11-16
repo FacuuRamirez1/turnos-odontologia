@@ -56,7 +56,24 @@ class DevolucionRepository:
         La consulta scopeada es la principal; el fallback global SOLO distingue
         404 (no existe) de 403 (existe fuera de alcance), sin devolver datos.
         """
-        visible = self._base_query().filter(Devolucion.id == devolucion_id).first()
+        return self._resolver(devolucion_id)
+
+    def get_for_update(self, devolucion_id: object) -> Devolucion | None:
+        """Igual que `get` pero con `SELECT … FOR UPDATE` (design D4, P4).
+
+        Serializa ejecuciones concurrentes de la misma devolución. En SQLite
+        `with_for_update()` es no-op (los tests validan la invariante); en
+        PostgreSQL bloquea la fila hasta el commit del ganador.
+        """
+        return self._resolver(devolucion_id, for_update=True)
+
+    def _resolver(
+        self, devolucion_id: object, *, for_update: bool = False,
+    ) -> Devolucion | None:
+        consulta = self._base_query().filter(Devolucion.id == devolucion_id)
+        if for_update:
+            consulta = consulta.with_for_update()
+        visible = consulta.first()
         if visible is not None:
             return visible
         existe = (
