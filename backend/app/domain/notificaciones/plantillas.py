@@ -1,8 +1,7 @@
-"""Plantillas versionadas v1 C-09 — confirmacion, recordatorio, aviso_devolucion.
+﻿"""Plantillas versionadas - confirmacion, recordatorio, aviso_devolucion.
 
-Cada render devuelve `(asunto, texto, html)`. Todo valor interpolado se escapa
-con `html.escape` (HTML); el texto plano interpola sin HTML. Los links de
-acción usan `API_PUBLIC_URL` y `urllib.parse.quote` del token.
+`aviso_devolucion` v2 (C-08): monto, resultado, "(simulado)" y
+"no se movio dinero real" en modo simulado. v1 se mantiene para filas viejas.
 """
 
 from collections.abc import Callable
@@ -12,9 +11,7 @@ from urllib.parse import quote
 
 from app.core.settings import get_settings
 
-PLANTILLAS: dict[str, dict[str, Callable[..., tuple[str, str, str]]]] = {
-    "v1": {}
-}
+PLANTILLAS: dict[str, dict[str, Callable[..., tuple[str, str, str]]]] = {"v1": {}, "v2": {}}
 
 _BASE_URL = get_settings().api_public_url.rstrip("/")
 
@@ -71,11 +68,11 @@ def _render_recordatorio(
     return asunto, texto, html
 
 
-def _render_aviso_devolucion(
+def _render_aviso_devolucion_v1(
     nombre: str, apellido: str, porcentaje: int, turno_inicio: str,
 ) -> tuple[str, str, str]:
     marca = _marca_simulado()
-    asunto = f"Aviso de devolución — turno del {escape(turno_inicio)}"
+    asunto = f"Aviso de devolución - turno del {escape(turno_inicio)}"
     texto = (
         f"Hola {escape(nombre)} {escape(apellido)}.\n"
         f"Se canceló tu turno del {escape(turno_inicio)}.\n"
@@ -92,10 +89,53 @@ def _render_aviso_devolucion(
     return asunto, texto, html
 
 
+def _render_aviso_devolucion_v2(
+    nombre: str,
+    apellido: str,
+    porcentaje: int,
+    turno_inicio: str,
+    monto: Any = None,
+    resultado: str = "",
+) -> tuple[str, str, str]:
+    if monto is None or str(monto).strip() == "":
+        raise ValueError("aviso_devolucion v2 requiere monto devuelto")
+    monto_txt = str(monto)
+    resultado_txt = str(resultado)
+    marca = _marca_simulado()
+    simulado_linea = "No se movió dinero real." if marca else ""
+    asunto = f"Aviso de devolución{marca} - turno del {escape(turno_inicio)}"
+    if resultado_txt == "ejecutada":
+        cuerpo_txt = f"Monto devuelto{marca}: {monto_txt}."
+        cuerpo_html = f"<p>Monto devuelto{escape(marca)}: <strong>{escape(monto_txt)}</strong>.</p>"
+    else:
+        cuerpo_txt = "No se otorgó la devolución y no se devolvió ningún monto."
+        cuerpo_html = "<p>No se otorgó la devolución y no se devolvió ningún monto.</p>"
+    texto = (
+        f"Hola {escape(nombre)} {escape(apellido)}.\n"
+        f"Resultado de la devolución: {resultado_txt}.\n"
+        f"Porcentaje: {porcentaje} %.\n"
+        f"{cuerpo_txt}\n"
+        f"{simulado_linea}\n"
+    )
+    html = (
+        f"<p>Hola {escape(nombre)} {escape(apellido)},</p>"
+        f"<p>Resultado de la devolución: <strong>{escape(resultado_txt)}</strong>.</p>"
+        f"<p>Porcentaje: <strong>{porcentaje} %</strong>.</p>"
+        f"{cuerpo_html}"
+        + (f"<p>{escape(simulado_linea)}</p>" if simulado_linea else "")
+    )
+    return asunto, texto, html
+
+
 PLANTILLAS["v1"] = {
     "confirmacion": _render_confirmacion,
     "recordatorio": _render_recordatorio,
-    "aviso_devolucion": _render_aviso_devolucion,
+    "aviso_devolucion": _render_aviso_devolucion_v1,
+}
+PLANTILLAS["v2"] = {
+    "confirmacion": _render_confirmacion,
+    "recordatorio": _render_recordatorio,
+    "aviso_devolucion": _render_aviso_devolucion_v2,
 }
 
 

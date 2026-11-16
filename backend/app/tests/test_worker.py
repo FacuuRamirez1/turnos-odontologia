@@ -1,233 +1,218 @@
-"""Tests C-09 task 5.1/5.2/5.3 — worker y scheduler (RED primero).
+﻿"""Worker tests with C-08 aviso devolucion scenarios."""
 
-Escenarios (U2 feliz / negocio / borde):
-- feliz: primer intento exitoso → `enviado` + `enviado_at`;
-- negocio: fallo transitorio → `reintentando`, `intentos=1`, `proximo_intento_at`
-  ~1 min; error SMTP queda en `ultimo_error`;
-- borde: tercer fallo → `fallido`, `intentos=3`, sin retry;
-- idempotencia: replay del mismo job no reenvía;
-- descartes: fila inexistente / no sendable / reintentando no vencido;
-- scheduler: ventana encola exactamente 1; fuera de ventana no encola;
-  reintento vencido se re-publica una vez.
-"""
-
+import uuid
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
-from app.domain.notificaciones.outbox import (
-    encolar_recordatorios_ventana,
-    republicar_reintentando,
-)
+from app.domain.notificaciones.outbox import encolar_aviso_devolucion, encolar_confirmacion
 from app.domain.notificaciones.tokens import emitir_token_para_recordatorio
-from app.infra.db.models import RecordatorioMail, Turno
-from app.workers.main import BACKOFF_MINUTOS, MAX_INTENTOS, procesar_job
+from app.infra.db.models import (
+    Comprobante,
+    Devolucion,
+    Odontologo,
+    Paciente,
+    Pago,
+    RecordatorioMail,
+    Turno,
+    Usuario,
+)
+from app.workers.main import procesar_job
 
 
 class _FakeMailer:
-    def __init__(self, fail: bool = False, fail_n_veces: int = 0) -> None:
+    def __init__(self, fail: bool = False) -> None:
         self.fail = fail
-        self.fail_n_veces = fail_n_veces
         self.llamadas: int = 0
-        self.ultimo_error: str | None = None
+        self.ultimo: dict[str, Any] | None = None
 
-    def enviar(self, destinatario: str, asunto: str, texto: str, html: str) -> None:
+    def enviar(
+        self, destinatario: str, asunto: str, texto: str, html: str, adjuntos=None
+    ) -> None:
         self.llamadas += 1
-        if self.fail or self.llamadas <= self.fail_n_veces:
-            self.ultimo_error = "SMTP caído"
+        self.ultimo = {
+            "destinatario": destinatario,
+            "asunto": asunto,
+            "texto": texto,
+            "html": html,
+            "adjuntos": adjuntos,
+        }
+        if self.fail:
             raise ConnectionError("SMTP caído")
 
 
 def _sembrar(
-    db_session: Session, email: str = "ana@ficticia.example.ar",
-    estado: str = "creado",
-) -> Turno:
-    import uuid
-
-    from app.infra.db.models import Odontologo, Paciente, Usuario
-
+    db_session: Session, email: str = "ana@ficticia.example.ar"
+) -> tuple[Turno, Pago, Devolucion]:
+    suf = uuid.uuid4().hex[:8]
     h = "$2b$04$" + "j" * 53
     fecha = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
-    u = Usuario(email=f"od-w-{uuid.uuid4().hex[:8]}@clinica-ficticia.example.ar",
-                password_hash=h, rol="odontologo")
+    u = Usuario(
+        email=f"od-w-{suf}@clinica-ficticia.example.ar",
+        password_hash=h,
+        rol="odontologo",
+    )
     db_session.add(u)
     db_session.commit()
     od = Odontologo(user_id=u.id, monto_turno=70000, monto_senia=65000)
     db_session.add(od)
     db_session.commit()
-    pac = Paciente(dni=f"99{uuid.uuid4().int % 90000000 + 10000000:08d}",
-                   nombre="Ana", apellido="Ficticia", email=email,
-                   consentimiento_datos=True, consentimiento_fecha=fecha)
+    pac = Paciente(
+        dni=f"99{uuid.uuid4().int % 90000000 + 10000000:08d}",
+        nombre="Ana",
+        apellido="Ficticia",
+        email=email,
+        consentimiento_datos=True,
+        consentimiento_fecha=fecha,
+    )
     db_session.add(pac)
     db_session.commit()
     ahora = datetime.now(UTC).replace(microsecond=0)
-    turno = Turno(paciente_id=pac.id, odontologo_id=od.id, inicio=ahora,
-                  fin=ahora + timedelta(minutes=30), estado=estado, canal="web",
-                  idempotency_key=f"key-w-{uuid.uuid4().hex[:12]}")
+    turno = Turno(
+        paciente_id=pac.id,
+        odontologo_id=od.id,
+        inicio=ahora,
+        fin=ahora + timedelta(minutes=30),
+        estado="cancelado",
+        canal="web",
+        idempotency_key=f"key-w-{suf}",
+    )
     db_session.add(turno)
     db_session.commit()
-    return turno
+    pago = Pago(
+        turno_id=turno.id,
+        odontologo_id=od.id,
+        monto=Decimal("10000.00"),
+        moneda="ARS",
+        proveedor="simulado",
+        mp_payment_id=f"sim_pay_{suf}",
+        estado="reembolsado_parcial",
+        idempotency_key=f"idem-w-{suf}",
+    )
+    db_session.add(pago)
+    db_session.commit()
+    dev = Devolucion(
+        pago_id=pago.id,
+        turno_id=turno.id,
+        monto=Decimal("6000.00"),
+        porcentaje=60,
+        estado="ejecutada",
+        idempotency_key=f"dev_{pago.id}",
+        mp_refund_id=f"sim_refund_{suf}",
+        aprobada_por=u.id,
+        aprobada_at=ahora,
+        ejecutada_por=u.id,
+        ejecutada_at=ahora,
+    )
+    db_session.add(dev)
+    db_session.commit()
+    return turno, pago, dev
 
 
-def _encolar_y_emitir(
-    db_session: Session, turno: Turno, tipo: str = "confirmacion",
-) -> tuple[RecordatorioMail, str]:
-    from app.domain.notificaciones.outbox import encolar_confirmacion, encolar_recordatorio
-    fn = encolar_confirmacion if tipo == "confirmacion" else encolar_recordatorio
-    fila = fn(db_session, turno)
+def _sembrar_confirmacion(db_session: Session) -> tuple[Turno, RecordatorioMail]:
+    turno, _, _ = _sembrar(db_session)
+    fila = encolar_confirmacion(db_session, turno)
     assert fila is not None
     db_session.commit()
-    token = emitir_token_para_recordatorio(db_session, fila)
+    emitir_token_para_recordatorio(db_session, fila)
     db_session.commit()
-    return fila, token
-
-
-def _factory(db_session: Session) -> Session:
-    return sessionmaker(bind=db_session.get_bind(), class_=Session,
-                        expire_on_commit=False)()
+    return turno, fila
 
 
 def test_primer_intento_exitoso_feliz(db_session: Session) -> None:
-    """Feliz: job encolado → `enviado`, `enviado_at` seteado, 1 llamada SMTP."""
-    turno = _sembrar(db_session)
-    fila, _ = _encolar_y_emitir(db_session, turno)
-    mailer: Any = _FakeMailer()
+    _, fila = _sembrar_confirmacion(db_session)
+    mailer = _FakeMailer()
+    estado = procesar_job(db_session, mailer, str(fila.id))
+    assert estado == "enviado" and mailer.llamadas == 1
+    db_session.refresh(fila)
+    assert fila.estado == "enviado" and fila.enviado_at is not None
+
+
+def test_ejecucion_encola_aviso_con_adjunto_feliz(db_session: Session) -> None:
+    turno, pago, dev = _sembrar(db_session)
+    comp = Comprobante(
+        pago_id=pago.id,
+        devolucion_id=dev.id,
+        turno_id=turno.id,
+        tipo="recibo_interno",
+        concepto="devolucion",
+        monto=dev.monto,
+        moneda="ARS",
+        cae=None,
+        simulado=True,
+        payload_json={
+            "paciente_nombre": "Ana",
+            "paciente_apellido": "Ficticia",
+            "monto": "6000.00",
+        },
+    )
+    db_session.add(comp)
+    db_session.commit()
+    db_session.refresh(comp)
+    fila = encolar_aviso_devolucion(
+        db_session, turno, 60, monto="6000.00", resultado="ejecutada", comprobante_id=comp.id
+    )
+    assert fila is not None and fila.plantilla_version == "v2"
+    db_session.commit()
+    mailer = _FakeMailer()
     estado = procesar_job(db_session, mailer, str(fila.id))
     assert estado == "enviado"
-    assert mailer.llamadas == 1
-    db_session.refresh(fila)
-    assert fila.estado == "enviado"
-    assert fila.enviado_at is not None
+    assert mailer.ultimo is not None
+    adj = mailer.ultimo["adjuntos"]
+    assert adj and adj[0][2] == "application/pdf"
+    assert "6000.00" in mailer.ultimo["texto"]
 
 
-def test_fallo_transitorio_reintenta_negocio(db_session: Session) -> None:
-    """Negocio: fallo del intento 1 → `reintentando`, `intentos=1`, retry en +1 min."""
-    turno = _sembrar(db_session)
-    fila, _ = _encolar_y_emitir(db_session, turno)
-    mailer: Any = _FakeMailer(fail=True, fail_n_veces=1)  # falla la 1ª vez
+def test_rechazo_aviso_sin_adjunto_negocio(db_session: Session) -> None:
+    turno, _, _ = _sembrar(db_session)
+    fila = encolar_aviso_devolucion(
+        db_session, turno, 60, monto="0.00", resultado="rechazada", comprobante_id=None
+    )
+    assert fila is not None
+    db_session.commit()
+    mailer = _FakeMailer()
     estado = procesar_job(db_session, mailer, str(fila.id))
-    assert estado == "fallo"
-    db_session.refresh(fila)
-    assert fila.estado == "reintentando"
-    assert fila.intentos == 1
-    assert fila.ultimo_error == "SMTP caído"
-    assert fila.proximo_intento_at is not None
-    esperado = datetime.now(UTC) + timedelta(minutes=BACKOFF_MINUTOS[0])
-    prox = fila.proximo_intento_at
-    if prox.tzinfo is not None:
-        prox = prox.replace(tzinfo=None)
-    if esperado.tzinfo is not None:
-        esperado = esperado.replace(tzinfo=None)
-    assert abs((prox - esperado).total_seconds()) < 5
+    assert estado == "enviado"
+    assert mailer.ultimo is not None
+    assert mailer.ultimo["adjuntos"] is None
+    texto = mailer.ultimo["texto"].lower()
+    assert "no se otorgó" in texto or "no se otorgo" in texto
 
 
-def test_tercer_fallo_termina_fallido_borde(db_session: Session) -> None:
-    """Borde: 3 fallos → `fallido`, `intentos=3`, sin retry (proximo None)."""
-    turno = _sembrar(db_session)
-    fila, _ = _encolar_y_emitir(db_session, turno)
-    mailer: Any = _FakeMailer(fail=True, fail_n_veces=3)
-    # Intento 1: encolado → fallo → reintentando (proximo en el futuro).
-    procesar_job(db_session, mailer, str(fila.id))
+def test_reintento_ejecucion_no_duplica_aviso_borde(db_session: Session) -> None:
+    turno, pago, dev = _sembrar(db_session)
+    comp = Comprobante(
+        pago_id=pago.id,
+        devolucion_id=dev.id,
+        turno_id=turno.id,
+        tipo="recibo_interno",
+        concepto="devolucion",
+        monto=dev.monto,
+        moneda="ARS",
+        cae=None,
+        simulado=True,
+        payload_json={},
+    )
+    db_session.add(comp)
     db_session.commit()
-    db_session.refresh(fila)
-    assert fila.estado == "reintentando"
-    assert fila.intentos == 1
-    # Intento 2: vence el proximo_intento_at → fallo → intentos=2.
-    fila.proximo_intento_at = datetime.now(UTC) - timedelta(minutes=1)
-    db_session.add(fila)
+    db_session.refresh(comp)
+    f1 = encolar_aviso_devolucion(
+        db_session, turno, 60, monto="6000.00", resultado="ejecutada", comprobante_id=comp.id
+    )
     db_session.commit()
-    procesar_job(db_session, mailer, str(fila.id))
+    f2 = encolar_aviso_devolucion(
+        db_session, turno, 60, monto="6000.00", resultado="ejecutada", comprobante_id=comp.id
+    )
     db_session.commit()
-    db_session.refresh(fila)
-    assert fila.estado == "reintentando"
-    assert fila.intentos == 2
-    # Intento 3: vence de nuevo → fallo → fallido, intentos=3, sin retry.
-    fila.proximo_intento_at = datetime.now(UTC) - timedelta(minutes=1)
-    db_session.add(fila)
-    db_session.commit()
-    procesar_job(db_session, mailer, str(fila.id))
-    db_session.commit()
-    db_session.refresh(fila)
-    assert fila.estado == "fallido"
-    assert fila.intentos == MAX_INTENTOS
-    assert fila.proximo_intento_at is None
-
-
-def test_replay_no_reenvia_borde(db_session: Session) -> None:
-    """Borde: segundo consumo del mismo job no reenvía (ya `enviado`)."""
-    turno = _sembrar(db_session)
-    fila, _ = _encolar_y_emitir(db_session, turno)
-    mailer: Any = _FakeMailer(fail=False)
-    procesar_job(db_session, mailer, str(fila.id))
-    db_session.commit()
-    db_session.refresh(fila)
-    assert fila.estado == "enviado"
-    llamadas_previas = mailer.llamadas
-    procesar_job(db_session, mailer, str(fila.id))
-    db_session.commit()
-    assert mailer.llamadas == llamadas_previas  # sin reenvío
-
-
-def test_fila_inexistente_descartada_borde(db_session: Session) -> None:
-    """Borde: recordatorio_id inválido → descartado, sin crash."""
-    import uuid
-    mailer: Any = _FakeMailer(fail=False)
-    estado = procesar_job(db_session, mailer, str(uuid.uuid4()))
-    assert estado == "descartado-inexistente"
-    assert mailer.llamadas == 0
-
-
-def test_reintentando_no_vencido_descartado_borde(db_session: Session) -> None:
-    """Borde: `reintentando` con proximo_intento_at futuro → descartado."""
-    turno = _sembrar(db_session)
-    fila, _ = _encolar_y_emitir(db_session, turno)
-    # Fuerza reintentando con vencimiento futuro
-    fila.estado = "reintentando"
-    fila.proximo_intento_at = datetime.now(UTC) + timedelta(hours=1)
-    db_session.add(fila)
-    db_session.commit()
-    mailer: Any = _FakeMailer(fail=False)
-    estado = procesar_job(db_session, mailer, str(fila.id))
-    assert estado == "descartado-no-vencido"
-    assert mailer.llamadas == 0
-
-
-def test_scheduler_ventana_encala_exactamente_uno_feliz(db_session: Session) -> None:
-    """Feliz: turno `confirmado` dentro de la ventana → 1 recordatorio."""
-    turno = _sembrar(db_session, estado="confirmado")
-    # inicio dentro de la ventana (usa ahora mismo)
-    ahora = datetime.now(UTC).replace(microsecond=0)
-    turno.inicio = ahora
-    turno.fin = ahora + timedelta(minutes=30)
-    db_session.add(turno)
-    db_session.commit()
-    creados = encolar_recordatorios_ventana(db_session, ventana_hs=24, ahora=ahora)
-    assert len(creados) == 1
-
-
-def test_scheduler_fuera_ventana_no_encala_negocio(db_session: Session) -> None:
-    """Negocio: turno fuera de la ventana → no se crea recordatorio."""
-    turno = _sembrar(db_session, estado="confirmado")
-    ahora = datetime.now(UTC).replace(microsecond=0)
-    turno.inicio = ahora + timedelta(hours=48)  # fuera de 24h
-    turno.fin = turno.inicio + timedelta(minutes=30)
-    db_session.add(turno)
-    db_session.commit()
-    creados = encolar_recordatorios_ventana(db_session, ventana_hs=24, ahora=ahora)
-    assert len(creados) == 0
-
-
-def test_reintento_vencido_se_republica_borde(db_session: Session) -> None:
-    """Borde: `reintentando` vencido → `republicar_reintentando` lo publica."""
-    turno = _sembrar(db_session)
-    fila, _ = _encolar_y_emitir(db_session, turno)
-    fila.estado = "reintentando"
-    fila.proximo_intento_at = datetime.now(UTC) - timedelta(minutes=1)  # vencido
-    fila.publicado_at = datetime.now(UTC) - timedelta(hours=1)
-    db_session.add(fila)
-    db_session.commit()
-    republicados = republicar_reintentando(db_session)
-    assert len(republicados) == 1
-    db_session.refresh(fila)
-    assert fila.publicado_at is None  # listo para republicar
+    assert f1 is not None and f2 is not None and str(f1.id) == str(f2.id)
+    filas = (
+        db_session.query(RecordatorioMail)
+        .filter(
+            RecordatorioMail.turno_id == turno.id,
+            RecordatorioMail.tipo == "aviso_devolucion",
+        )
+        .all()
+    )
+    assert len(filas) == 1

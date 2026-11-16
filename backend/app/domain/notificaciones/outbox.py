@@ -1,14 +1,4 @@
-"""Outbox transaccional C-09 — servicios de encolado y publicación.
-
-Los servicios `encolar_*` solo insertan/actualizan la fila en la misma
-sesión/transacción del caller (la transacción del turno o del historial).
-Nunca publican a Redis ni envían SMTP. La publicación la hace `publicar_pendientes`
-y el worker la consume de `mail:pendientes`.
-
-Idempotencia: `UNIQUE (turno_id, tipo)`; si ya existe se devuelve. Si dos
-transacciones compiten, el `UNIQUE` arbitra (`IntegrityError` → rollback →
-requery), igual que el patrón C-05.
-"""
+﻿"""Outbox transaccional C-09/C-08 - servicios de encolado y publicacion."""
 
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -23,7 +13,6 @@ from app.infra.db.models import Paciente, RecordatorioMail, Turno
 
 
 def _paciente_email(session: Session, paciente_id: uuid.UUID) -> str | None:
-    """Email del paciente si existe y es usable (no blanco)."""
     fila = session.query(Paciente).filter(Paciente.id == paciente_id).first()
     if fila is None:
         return None
@@ -36,7 +25,6 @@ def _paciente_email(session: Session, paciente_id: uuid.UUID) -> str | None:
 def _obtener_existente(
     session: Session, turno_id: uuid.UUID, tipo: str,
 ) -> RecordatorioMail | None:
-    """Devuelve el registro activo por (turno_id, tipo) o None."""
     return (
         session.query(RecordatorioMail)
         .filter(
@@ -51,7 +39,6 @@ def _obtener_existente(
 def _flush_o_requery(
     session: Session, fila: RecordatorioMail, turno_id: uuid.UUID, tipo: str,
 ) -> RecordatorioMail:
-    """Hace flush de `fila`; ante carrera por UNIQUE, rollback y reconsulta."""
     try:
         session.flush()
     except IntegrityError:
@@ -69,8 +56,8 @@ def _crear_fila(
     tipo: str,
     email: str | None,
     emitir_token: bool,
+    plantilla_version: str = "v1",
 ) -> RecordatorioMail:
-    """Crea y persiste una fila (sin verificar duplicado previo)."""
     ahora = datetime.now(UTC)
     if email is None:
         fila = RecordatorioMail(
@@ -80,7 +67,7 @@ def _crear_fila(
             estado="fallido",
             intentos=0,
             ultimo_error="paciente sin email",
-            # publicado_at se deja None: nunca se publica (terminal sin reintento).
+            plantilla_version=plantilla_version,
         )
     else:
         fila = RecordatorioMail(
@@ -89,30 +76,31 @@ def _crear_fila(
             destinatario=email,
             estado="encolado",
             intentos=0,
+            plantilla_version=plantilla_version,
         )
         if emitir_token:
             token = issue_action_token(
-                str(fila.id), "mail_accion",
-                action_min=get_settings().mail_action_ttl_min,
+                str(fila.id), "mail_accion", action_min=get_settings().mail_action_ttl_min,
             )
             fila.token_accion_hash = token_hash_raw(token)
-            fila.token_expira_at = ahora + timedelta(
-                minutes=get_settings().mail_action_ttl_min
-            )
+            fila.token_expira_at = ahora + timedelta(minutes=get_settings().mail_action_ttl_min)
     session.add(fila)
     return _flush_o_requery(session, fila, turno_id, tipo)
 
 
 def _encolar(
-    session: Session, turno: Turno, tipo: str, emitir_token: bool,
+    session: Session,
+    turno: Turno,
+    tipo: str,
+    emitir_token: bool,
     contexto: dict[str, object] | None = None,
+    plantilla_version: str = "v1",
 ) -> RecordatorioMail | None:
-    """Núcleo de encolado idempotente por (turno_id, tipo)."""
     existente = _obtener_existente(session, turno.id, tipo)
     if existente is not None:
         return existente
     email = _paciente_email(session, turno.paciente_id)
-    fila = _crear_fila(session, turno.id, tipo, email, emitir_token)
+    fila = _crear_fila(session, turno.id, tipo, email, emitir_token, plantilla_version)
     if contexto is not None and email is not None:
         fila.contexto_json = contexto
         session.add(fila)
@@ -121,38 +109,38 @@ def _encolar(
 
 
 def encolar_confirmacion(session: Session, turno: Turno) -> RecordatorioMail | None:
-    """Encola (o devuelve existente) la confirmación de un turno confirmado."""
     return _encolar(session, turno, "confirmacion", emitir_token=True)
 
 
 def encolar_recordatorio(session: Session, turno: Turno) -> RecordatorioMail | None:
-    """Encola (o devuelve existente) el recordatorio de un turno confirmado."""
     return _encolar(session, turno, "recordatorio", emitir_token=True)
 
 
 def encolar_aviso_devolucion(
-    session: Session, turno: Turno, porcentaje: int,
+    session: Session,
+    turno: Turno,
+    porcentaje: int,
+    *,
+    monto: object | None = None,
+    resultado: str | None = None,
+    comprobante_id: object | None = None,
 ) -> RecordatorioMail | None:
-    """Encola (o devuelve existente) el aviso de devolución con la cotización.
+    """Encola (idempotente) el aviso de devolucion.
 
-    No ejecuta devolución real (C-08 pendiente); solo deja constancia del
-    porcentaje en `contexto_json` para que el mail lo muestre al enviar.
+    C-08: con `monto/resultado` usa plantilla v2 y persiste contexto completo.
+    Compatibilidad: llamada solo con porcentaje (cotizacion) usa v1.
     """
-    return _encolar(
-        session,
-        turno,
-        "aviso_devolucion",
-        emitir_token=False,
-        contexto={"porcentaje": porcentaje},
-    )
+    if monto is None and resultado is None and comprobante_id is None:
+        return _encolar(session, turno, "aviso_devolucion", False, {"porcentaje": porcentaje}, "v1")
+    contexto: dict[str, object] = {"porcentaje": porcentaje, "resultado": resultado}
+    if monto is not None:
+        contexto["monto"] = str(monto)
+    if comprobante_id is not None:
+        contexto["comprobante_id"] = str(comprobante_id)
+    return _encolar(session, turno, "aviso_devolucion", False, contexto, "v2")
 
 
 def publicar_pendientes(session: Session) -> list[RecordatorioMail]:
-    """Publica filas `encolado` sin `publicado_at` y las marca con ahora().
-
-    Fuente de verdad para el worker: cubre caídas entre commit y push.
-    Devuelve las filas publicadas.
-    """
     ahora = datetime.now(UTC)
     pendientes = (
         session.query(RecordatorioMail)
@@ -170,10 +158,6 @@ def publicar_pendientes(session: Session) -> list[RecordatorioMail]:
 
 
 def republicar_reintentando(session: Session) -> list[RecordatorioMail]:
-    """Re-publica `reintentando` vencidos cuyo `proximo_intento_at` pasó.
-
-    `publicado_at <= proximo_intento_at` evita republicar entre ticks.
-    """
     ahora = datetime.now(UTC)
     vencidos = (
         session.query(RecordatorioMail)
@@ -186,7 +170,7 @@ def republicar_reintentando(session: Session) -> list[RecordatorioMail]:
         .all()
     )
     for fila in vencidos:
-        fila.publicado_at = None  # el worker lo vuelve a recoger
+        fila.publicado_at = None
     session.flush()
     return vencidos
 
@@ -194,10 +178,6 @@ def republicar_reintentando(session: Session) -> list[RecordatorioMail]:
 def encolar_recordatorios_ventana(
     session: Session, ventana_hs: int, ahora: datetime | None = None,
 ) -> list[RecordatorioMail]:
-    """Encola un `recordatorio` por turno `confirmado` que inicie dentro de
-    `ventana_hs` y aún no tenga recordatorio (una sola vez por turno)."""
-    from datetime import timedelta
-
     referencia = ahora or datetime.now(UTC)
     hasta = referencia + timedelta(hours=ventana_hs)
     turnos = (
@@ -212,12 +192,10 @@ def encolar_recordatorios_ventana(
     )
     creados: list[RecordatorioMail] = []
     for turno in turnos:
-        existente = _obtener_existente(session, turno.id, "recordatorio")
-        if existente is not None:
+        if _obtener_existente(session, turno.id, "recordatorio") is not None:
             continue
         email = _paciente_email(session, turno.paciente_id)
         if email is None:
-            continue  # sin email: se salta (fallido solo si se invoca _crear_fila)
-        fila = _crear_fila(session, turno.id, "recordatorio", email, emitir_token=True)
-        creados.append(fila)
+            continue
+        creados.append(_crear_fila(session, turno.id, "recordatorio", email, True))
     return creados

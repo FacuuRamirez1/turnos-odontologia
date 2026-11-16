@@ -27,8 +27,9 @@ from app.domain.devoluciones.repositories import (
     DevolucionFueraDeScope,
     DevolucionRepository,
 )
+from app.domain.notificaciones.outbox import encolar_aviso_devolucion
 from app.domain.pagos.service import get_proveedor_pago, marca_pago_actual
-from app.infra.db.models import Devolucion
+from app.infra.db.models import Comprobante, Devolucion, Turno
 from app.infra.db.models.pago import EventoPago, Pago
 from app.infra.db.session import get_db
 
@@ -241,6 +242,16 @@ def rechazar_devolucion(
             actor=ident.rol,
         )
     )
+    turno = db.get(Turno, devolucion.turno_id)
+    if turno is not None:
+        encolar_aviso_devolucion(
+            db,
+            turno,
+            int(devolucion.porcentaje),
+            monto=Decimal(str(devolucion.monto)),
+            resultado="rechazada",
+            comprobante_id=None,
+        )
     db.commit()
     db.refresh(devolucion)
     return _out(devolucion)
@@ -337,10 +348,9 @@ def ejecutar_devolucion(
     resultado = procesar_webhook(
         db, str(evento["payload"]), str(evento["firma"]), actor="sistema",
     )
-    db.commit()
-
     error = str(resultado.get("error", ""))
     if error:
+        db.commit()
         if error in ("pago_no_encontrado", "devolucion_no_encontrada"):
             raise HTTPException(status.HTTP_404_NOT_FOUND, error)
         return JSONResponse(
@@ -348,5 +358,25 @@ def ejecutar_devolucion(
             content={"code": "EJECUCION_RECHAZADA", "detail": error},
         )
 
+    db.refresh(devolucion)
+    turno = db.get(Turno, devolucion.turno_id)
+    comprobante = (
+        db.query(Comprobante)
+        .filter(
+            Comprobante.devolucion_id == devolucion.id,
+            Comprobante.concepto == "devolucion",
+        )
+        .first()
+    )
+    if turno is not None and str(devolucion.estado) == "ejecutada":
+        encolar_aviso_devolucion(
+            db,
+            turno,
+            int(devolucion.porcentaje),
+            monto=Decimal(str(devolucion.monto)),
+            resultado="ejecutada",
+            comprobante_id=comprobante.id if comprobante is not None else None,
+        )
+    db.commit()
     db.refresh(devolucion)
     return _ejecutar_out(db, devolucion)

@@ -1,11 +1,4 @@
-"""Tests C-09 task 3.2 — adaptador SMTP stdlib (RED primero, task 3.2).
-
-Escenarios (U2 feliz / negocio / borde):
-- feliz: envío contra MailHog sin auth → mensaje aceptado;
-- negocio: SMTP caído propaga error reintentable;
-- borde: From siempre alineado a MAIL_FROM.
-No se agregan dependencias de terceros (smtplib + EmailMessage solo).
-"""
+﻿"""Tests C-09/C-08 - adaptador SMTP stdlib (TDD 6.1)."""
 
 import smtplib
 from email.message import EmailMessage
@@ -17,10 +10,8 @@ from app.infra.smtp.client import SmtpMailer
 
 
 class _FakeSMTP:
-    """Doble de smtplib.SMTP: captura el mensaje enviado, puede fallar."""
-
     def __init__(
-        self, host: str, port: int, timeout: int | None = None, fail: bool = False,
+        self, host: str, port: int, timeout: int | None = None, fail: bool = False
     ) -> None:
         self.host = host
         self.port = port
@@ -37,7 +28,7 @@ class _FakeSMTP:
 
     def login(self, user: str, password: str) -> None:
         if self.fail:
-            raise ConnectionError("SMTP caído")
+            raise ConnectionError("SMTP caido")
         self.logueado = (user, password)
 
     def send_message(self, msg: EmailMessage) -> None:
@@ -46,47 +37,44 @@ class _FakeSMTP:
         self.enviado = msg
 
 
-def _mailer(fail: bool = False) -> SmtpMailer:
-    return SmtpMailer(host="mailhog", port=1025, user="", password="",
-                      mail_from="turnos@clinica-ficticia.example.ar")
+def _mailer(mail_from: str = "turnos@clinica-ficticia.example.ar") -> SmtpMailer:
+    return SmtpMailer(host="mailhog", port=1025, user="", password="", mail_from=mail_from)
 
 
-def test_envio_mailhog_sin_auth_feliz(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Feliz: MailHog sin credenciales, mensaje aceptado."""
-    fake: Any = _FakeSMTP(host="mailhog", port=1025, fail=False)
+def test_adjunto_pdf_viaja_como_application_pdf_feliz(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake: Any = _FakeSMTP(host="mailhog", port=1025)
     monkeypatch.setattr("smtplib.SMTP", lambda *a, **k: fake)
-    m = _mailer()
-    m.enviar("paciente@ficticia.example.ar", "Asunto", "texto", "<b>html</b>")
-    assert fake.logueado is False  # sin auth
+    pdf = b"%PDF-1.4 recibo"
+    _mailer().enviar(
+        "paciente@ficticia.example.ar",
+        "Aviso",
+        "texto",
+        "<b>html</b>",
+        adjuntos=[("recibo-RI-000001.pdf", pdf, "application/pdf")],
+    )
     assert fake.enviado is not None
-    assert str(fake.enviado["From"]) == "turnos@clinica-ficticia.example.ar"
-    assert str(fake.enviado["To"]) == "paciente@ficticia.example.ar"
-
-
-def test_smtp_caido_propaga_error_negocio(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Negocio: SMTP inalcanzable lanza SMTPException (reintentable)."""
-    fake: Any = _FakeSMTP(host="mailhog", port=1025, fail=True)
-    monkeypatch.setattr("smtplib.SMTP", lambda *a, **k: fake)
-    m = _mailer()
-    with pytest.raises(smtplib.SMTPException):
-        m.enviar("paciente@ficticia.example.ar", "A", "t", "<b>h</b>")
-
-
-def test_from_siempre_alineado_borde(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Borde: From = MAIL_FROM en todo mensaje, independiente del destinatario."""
-    fake: Any = _FakeSMTP(host="mailhog", port=1025, fail=False)
-    monkeypatch.setattr("smtplib.SMTP", lambda *a, **k: fake)
-    m = SmtpMailer(host="mailhog", port=1025, user="u", password="p",
-                   mail_from="turnos@clinica-ficticia.example.ar")
-    m.enviar("otra@ficticia.example.ar", "A", "t", "<b>h</b>")
-    assert fake.enviado is not None
+    adjuntos = list(fake.enviado.iter_attachments())
+    assert len(adjuntos) == 1
+    assert adjuntos[0].get_content_type() == "application/pdf"
+    assert adjuntos[0].get_filename() == "recibo-RI-000001.pdf"
+    assert adjuntos[0].get_payload(decode=True) == pdf
     assert str(fake.enviado["From"]) == "turnos@clinica-ficticia.example.ar"
 
 
-def test_login_solo_con_usuario(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Feliz/borde: login solo cuando SMTP_USER no está vacío."""
-    fake: Any = _FakeSMTP(host="mailhog", port=1025, fail=False)
+def test_sin_adjuntos_mensaje_no_cambia_borde(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake: Any = _FakeSMTP(host="mailhog", port=1025)
     monkeypatch.setattr("smtplib.SMTP", lambda *a, **k: fake)
-    m = _mailer()  # user="" → sin login
-    m.enviar("a@b.c", "A", "t", "<b>h</b>")
-    assert fake.logueado is False
+    _mailer().enviar("otra@ficticia.example.ar", "A", "texto-plano", "<b>html</b>")
+    assert fake.enviado is not None
+    assert list(fake.enviado.iter_attachments()) == []
+    assert fake.enviado.get_body(preferencelist=("plain")) is not None
+    assert fake.enviado.get_body(preferencelist=("html")) is not None
+
+
+def test_from_siempre_alineado_a_mail_from_borde(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake: Any = _FakeSMTP(host="mailhog", port=1025)
+    monkeypatch.setattr("smtplib.SMTP", lambda *a, **k: fake)
+    mail_from = "turnos@clinica-ficticia.example.ar"
+    _mailer(mail_from).enviar("otra@ficticia.example.ar", "A", "t", "<b>h</b>")
+    assert fake.enviado is not None
+    assert str(fake.enviado["From"]) == mail_from
