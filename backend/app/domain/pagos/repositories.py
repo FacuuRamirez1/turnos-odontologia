@@ -12,9 +12,30 @@ from typing import TypeVar, cast
 from sqlalchemy.orm import Session
 
 from app.infra.db.models.pago import EventoPago, Pago
+from app.infra.db.models.turno import Turno
 from app.infra.db.repository import BaseRepository
 
 T = TypeVar("T")
+
+
+def resolver_pago_de_turno(session: Session, turno: Turno) -> Pago | None:
+    """Pago asociado al turno (C-08 design Context/D1).
+
+    `turno.pago_id` manda cuando existe; si es null (turno original tras una
+    reprogramación) se resuelve por `Pago.turno_id == turno.id`. Sin pago →
+    `None` (turno nunca cobrado o pago eliminado lógicamente).
+    """
+    if turno.pago_id is not None:
+        return (
+            session.query(Pago)
+            .filter(Pago.id == turno.pago_id, Pago.is_active.is_(True))
+            .first()
+        )
+    return (
+        session.query(Pago)
+        .filter(Pago.turno_id == turno.id, Pago.is_active.is_(True))
+        .first()
+    )
 
 
 class PagoRepository(BaseRepository[Pago]):

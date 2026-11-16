@@ -39,8 +39,13 @@ SECRET = "secreto-de-test-ficticio"
 def _sembrar(
     db_session: Session, estado: str = "confirmado",
     email: str = "ana@ficticia.example.ar",
+    *, inicio: datetime | None = None, con_pago: bool = False,
 ) -> tuple[Turno, Paciente]:
     import uuid
+    from decimal import Decimal
+
+    from app.infra.db.models import Pago
+
     h = "$2b$04$" + "j" * 53
     fecha = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
     u = Usuario(email=f"od-api-{uuid.uuid4().hex[:8]}@clinica-ficticia.example.ar",
@@ -55,12 +60,24 @@ def _sembrar(
                    consentimiento_datos=True, consentimiento_fecha=fecha)
     db_session.add(pac)
     db_session.commit()
-    ahora = datetime.now(UTC).replace(microsecond=0)
+    ahora = inicio or datetime.now(UTC).replace(microsecond=0)
     turno = Turno(paciente_id=pac.id, odontologo_id=od.id, inicio=ahora,
                   fin=ahora + timedelta(minutes=30), estado=estado, canal="web",
                   idempotency_key=f"key-api-{uuid.uuid4().hex[:12]}")
     db_session.add(turno)
     db_session.commit()
+    if con_pago:
+        pago = Pago(
+            turno_id=turno.id, odontologo_id=od.id, monto=Decimal("65000.00"),
+            moneda="ARS", proveedor="simulado",
+            mp_payment_id=f"sim_pay_{uuid.uuid4()}", estado="aprobado",
+            idempotency_key=f"idem-api-{uuid.uuid4().hex[:12]}",
+        )
+        db_session.add(pago)
+        db_session.commit()
+        turno.pago_id = pago.id
+        db_session.add(turno)
+        db_session.commit()
     return turno, pac
 
 
@@ -165,6 +182,73 @@ def test_cancelar_no_confirmado_negocio(db_session: Session) -> None:
     cli = _client(db_session)
     resp = cli.get(f"/api/mail/cancelar?token={token}")
     assert resp.status_code == 409, resp.text
+
+
+def test_cancelar_deja_devolucion_pendiente_feliz(db_session: Session) -> None:
+    """Feliz (C-08 D1): con pago aprobado e en término → devolución pendiente."""
+    from app.infra.db.models import Devolucion, EventoPago
+
+    turno, _ = _sembrar(db_session, "confirmado",
+                        inicio=datetime.now(UTC) + timedelta(days=30),
+                        con_pago=True)
+    fila, token = _fila_con_token(db_session, turno)
+    cli = _client(db_session)
+    resp = cli.get(f"/api/mail/cancelar?token={token}")
+    assert resp.status_code == 200, resp.text
+    assert "100 %" in resp.text
+    assert "revisión" in resp.text
+    assert "(simulado)" in resp.text
+
+    devs = db_session.query(Devolucion).filter(Devolucion.turno_id == turno.id).all()
+    assert len(devs) == 1
+    assert devs[0].estado == "pendiente" and devs[0].porcentaje == 100
+    assert db_session.query(EventoPago).filter(
+        EventoPago.pago_id == devs[0].pago_id,
+        EventoPago.tipo_evento == "devolucion_solicitada").count() == 1
+
+
+def test_cancelar_no_confirmado_sin_transicion_ni_devolucion_negocio(
+    db_session: Session,
+) -> None:
+    """Negocio: turno no `confirmado` → sin transición, ejecución ni aprobación."""
+    from app.infra.db.models import Devolucion, EventoPago, TurnoHistorial
+
+    turno, _ = _sembrar(db_session, "creado",
+                        inicio=datetime.now(UTC) + timedelta(days=30),
+                        con_pago=True)
+    fila, token = _fila_con_token(db_session, turno)
+    cli = _client(db_session)
+    resp = cli.get(f"/api/mail/cancelar?token={token}")
+    assert resp.status_code == 409, resp.text
+    assert db_session.query(Devolucion).count() == 0
+    assert db_session.query(TurnoHistorial).filter(
+        TurnoHistorial.turno_id == turno.id).count() == 0
+    assert db_session.query(EventoPago).filter(
+        EventoPago.tipo_evento.in_(
+            ["devolucion_aprobada", "devolucion_ejecutada"])).count() == 0
+    db_session.refresh(turno)
+    assert str(turno.estado) == "creado"
+
+
+def test_cancelar_cotizacion_cero_sin_devolucion_ni_aviso_borde(
+    db_session: Session,
+) -> None:
+    """Borde: post-`inicio` (0 %) → sin `devolucion` ni `aviso_devolucion`."""
+    from app.infra.db.models import Devolucion
+
+    turno, _ = _sembrar(db_session, "confirmado",
+                        inicio=datetime.now(UTC) - timedelta(hours=1),
+                        con_pago=True)
+    fila, token = _fila_con_token(db_session, turno)
+    cli = _client(db_session)
+    resp = cli.get(f"/api/mail/cancelar?token={token}")
+    assert resp.status_code == 200, resp.text
+    assert "0 %" in resp.text
+    assert db_session.query(Devolucion).count() == 0
+    assert db_session.query(RecordatorioMail).filter(
+        RecordatorioMail.tipo == "aviso_devolucion").count() == 0
+    db_session.refresh(turno)
+    assert str(turno.estado) == "cancelado"
 
 
 def test_rate_limit_rafaga_429_negocio(db_session: Session) -> None:

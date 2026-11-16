@@ -6,7 +6,7 @@
 > Corte de alcance: **P2=b (v1 completo junto)** — reserva + agenda + seña + mail se construyen juntos (D1); el recorte cae sobre reportes/UX, nunca sobre pagos/auditoría (D2).
 > **D14 (2026-11-05)**: en el MVP la seña se cobra con un **proveedor de pagos simulado** (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; MercadoPago real queda diseñado, no construido (v2/producción). El camino crítico y las dependencias no cambian; C-07 y C-08 siguen pendientes con alcance reescrito (ver `knowledge-base/11_pagos_mercadopago.md` §0).
 > **Nombres**: el change archivado en openspec como "C-07" es **C-07F** (frontend-interfaz-agenda); el **C-07** de este índice es **pagos** (`pagos-mp-checkout-webhook`, pendiente).
-> **Migraciones**: head actual = `004_recordatorio_mail` (C-09); C-07 → `005`, C-08 → `006`.
+> **Migraciones**: head actual = `006_devolucion_comprobante` (C-08, en curso); C-09 → `004`, C-07 → `005`.
 
 ---
 
@@ -204,7 +204,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
    - Tests: concurrencia (no doble-reserva), transiciones válidas/inválidas, TTL pre-reserva, aislamiento
    - **Nota de renumeración (C-05 apply)**: C-05 toma la migración `003` (turno+historial) por orden de
      dependencias; C-07 pasaba a `004`, C-08 a `005`, C-09 a `006` (ver design Riesgo de C-05). **Actualización**: C-09 tomó
-     la `004` (`004_recordatorio_mail`, head actual), por lo que **C-07 → `005` y C-08 → `006`**.
+     la `004` (`004_recordatorio_mail`, C-09), por lo que **C-07 → `005` y C-08 → `006`**.
 - **Dependencias**: C-04
 - **Governance**: CRITICO
 - **Leer antes**:
@@ -313,7 +313,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ### [C-09] `mails-recordatorios`
 - **Estado**: `[x]` completado
 - **Scope**: Subsistema de notificaciones mail-only v1 (épica E completa en núcleo; productor de confirmación C-07 y productor de aviso de devolución C-08 pendiente de integración).
-  - Modelo `RecordatorioMail` (`turno_id, tipo, destinatario, plantilla_version, estado encolado|enviado|reintentando|fallido|confirmado_desde_mail|cancelado_desde_mail, intentos, token_accion` hash único con expiración) + **migración 004** (`004_recordatorio_mail`, head actual; C-07 → 005 y C-08 → 006).
+  - Modelo `RecordatorioMail` (`turno_id, tipo, destinatario, plantilla_version, estado encolado|enviado|reintentando|fallido|confirmado_desde_mail|cancelado_desde_mail, intentos, token_accion` hash único con expiración) + **migración 004** (`004_recordatorio_mail`, C-09; C-07 → 005 y C-08 → 006).
   - Workers Redis separados del request path: colas, reintentos backoff 3 intentos, scheduler de ventana configurable `RECORDATORIO_VENTANA_HS`.
   - Mails: confirmación al reservar/al confirmar (A3, enganchada en `transition()` `creado→confirmado` actor `sistema` para C-07), recordatorio en ventana (E1), aviso de devolución con cotización seña (F2 sin ejecución de devolución hasta C-08; con marca "(simulado)" cuando `PAGO_MODO=simulado`, D14); plantillas versionadas.
   - `GET /api/mail/confirmar?token=` / `/api/mail/cancelar?token=` — tokens firmados un solo uso, vida corta, hash en DB y consumo en DB; cancelar deriva a F2 mostrando regla de seña (E2).

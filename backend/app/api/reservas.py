@@ -32,6 +32,7 @@ from app.domain.pacientes.service import (
     normalizar_dni,
     validar_formato_dni,
 )
+from app.domain.pagos.repositories import resolver_pago_de_turno
 from app.domain.pagos.service import get_proveedor_pago
 from app.domain.turnos.cancelacion import cotizar_devolucion
 from app.domain.turnos.estados import (
@@ -527,13 +528,13 @@ def cancelar(
 ) -> JSONResponse:
     """`confirmado→cancelado` + liberación en el mismo commit (RN-LIBERACION).
 
-    Crea el registro de devolución `pendiente` con porcentaje (entidad lógica
-    que C-08 materializa; viaja en la respuesta para la bandeja).
+    C-08 (D1): la transición crea la `devolucion(pendiente)` cuando hay pago
+    aprobado y la cotización es > 0 %. La respuesta devuelve esa devolución
+    persistida (`id`, `porcentaje`, `monto`, `estado`) o `null` si no hubo pago
+    aprobado o la cotización fue 0 % (BREAKING aprobado en el propose).
     """
     turno = _turno_o_404(db, turno_id)
     actor_tipo, actor_id, a_consumir = _actor_para_turno(request, db, turno, dni, token)
-    inicio = turno.inicio if turno.inicio.tzinfo else turno.inicio.replace(tzinfo=UTC)
-    porcentaje = cotizar_devolucion(inicio, get_settings().anticipacion_min_hs)
     fila = _transicion_http(db, turno, "cancelado", actor_tipo, actor_id, cuerpo.motivo)
     if a_consumir is not None:
         from app.api.pacientes import get_paciente_action_store
@@ -542,8 +543,27 @@ def cancelar(
             a_consumir, get_settings().jwt_action_min * 60)
     return JSONResponse(status_code=200, content={
         "id": str(fila.id), "estado": str(fila.estado),
-        "devolucion": {"estado": "pendiente", "porcentaje": porcentaje},
+        "devolucion": _devolucion_json(db, fila.id),
     })
+
+
+def _devolucion_json(db: Session, turno_id: uuid.UUID) -> dict[str, object] | None:
+    """Devolución persistida del turno (o `None` si la cotización fue 0 %)."""
+    from app.infra.db.models import Devolucion
+
+    devolucion = (
+        db.query(Devolucion)
+        .filter(Devolucion.turno_id == turno_id, Devolucion.is_active.is_(True))
+        .first()
+    )
+    if devolucion is None:
+        return None
+    return {
+        "id": str(devolucion.id),
+        "porcentaje": int(devolucion.porcentaje),
+        "monto": float(devolucion.monto),
+        "estado": str(devolucion.estado),
+    }
 
 
 class ReprogramarBody(BaseModel):
@@ -608,15 +628,10 @@ def reprogramar(
             "code": "SLOT_OCUPADO", "detail": "Idempotency-Key ya usada"})
 
     origen_id = uuid.UUID(str(turno.id))
-    pago_id_heredado = turno.pago_id
-    if pago_id_heredado is None:
-        pago_asociado = (
-            db.query(Pago)
-            .filter(Pago.turno_id == origen_id, Pago.is_active.is_(True))
-            .first()
-        )
-        if pago_asociado is not None:
-            pago_id_heredado = pago_asociado.id
+    pago_asociado = resolver_pago_de_turno(db, turno)
+    pago_id_heredado = (
+        pago_asociado.id if pago_asociado is not None else turno.pago_id
+    )
     try:
         transition(db, origen_id, "reprogramado",
                    actor_tipo=actor_tipo, actor_id=actor_id,

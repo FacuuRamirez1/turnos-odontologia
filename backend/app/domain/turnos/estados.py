@@ -106,6 +106,20 @@ def transition(
         from app.domain.notificaciones.outbox import encolar_confirmacion
 
         encolar_confirmacion(session, turno)
+    # C-08 (design D1): alta de la devolución como efecto de la cancelación.
+    # Mismo instante (`referencia`) que la transición → el borde exacto de
+    # anticipación coincide con la cotización previa. Import diferido (igual
+    # que el outbox) para evitar el ciclo estados → devoluciones → estados.
+    # Se agrega filas y el `flush()` de abajo arbitra: si falla, el rollback
+    # revierte también el cambio de estado del turno.
+    if (origen, destino) == ("confirmado", "cancelado"):
+        from app.domain.devoluciones.service import registrar_por_cancelacion
+
+        registrar_por_cancelacion(
+            session, turno,
+            actor_tipo=actor_tipo, actor_id=actor_id,
+            ahora=referencia, motivo=motivo,
+        )
     try:
         session.flush()
     except IntegrityError as exc:

@@ -21,6 +21,7 @@ from app.core.security.jwt import AuthError, ExpiredAuthError, decode_and_valida
 from app.core.settings import get_settings
 from app.domain.notificaciones.metricas import contar_por_estado
 from app.domain.notificaciones.tokens import consumir_token_db, token_hash_raw
+from app.domain.pagos.service import marca_pago_actual
 from app.domain.turnos.cancelacion import cotizar_devolucion
 from app.domain.turnos.estados import (
     ActorNoAutorizado,
@@ -29,7 +30,7 @@ from app.domain.turnos.estados import (
     VersionConflict,
     transition,
 )
-from app.infra.db.models import RecordatorioMail, Turno, TurnoHistorial
+from app.infra.db.models import Devolucion, RecordatorioMail, Turno, TurnoHistorial
 from app.infra.db.session import get_db
 from app.infra.redis.rate_limit import LoginRateLimiter, build_rate_limiter
 
@@ -223,13 +224,26 @@ def cancelar(
     db.add(fila)
     db.commit()
     db.refresh(turno)
+    devolucion = (
+        db.query(Devolucion)
+        .filter(Devolucion.turno_id == turno.id, Devolucion.is_active.is_(True))
+        .first()
+    )
+    if devolucion is not None:
+        detalle = (
+            f"<p>Devolución de la seña: <strong>{devolucion.porcentaje} %</strong> "
+            f"({devolucion.monto} ARS).</p>"
+            "<p>La devolución quedó <strong>pendiente de revisión</strong> por la "
+            f"administración. {marca_pago_actual()}</p>"
+        )
+    else:
+        detalle = (
+            f"<p>Devolución de la seña: <strong>{porcentaje} %</strong>.</p>"
+            "<p>No se generó una devolución para este turno.</p>"
+        )
     return _html(
         "Turno cancelado",
-        (
-            f"<p>Turno del {turno.inicio:%d/%m/%Y %H:%M} cancelado.</p>"
-            f"<p>Devolución de la seña: <strong>{porcentaje} %</strong>.</p>"
-            f"<p>(La devolución se gestiona por la administración.)</p>"
-        ),
+        f"<p>Turno del {turno.inicio:%d/%m/%Y %H:%M} cancelado.</p>{detalle}",
     )
 
 

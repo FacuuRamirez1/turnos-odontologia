@@ -96,3 +96,48 @@ def test_carrera_con_version_vieja_409_borde(db_session: Session) -> None:
         transition(db_session, turno_id, "atendido",
                    actor_tipo="odontologo", actor_id="od-1",
                    version_esperada=1)
+
+
+def test_confirmado_a_cancelado_sin_pago_no_crea_devolucion_borde(
+    db_session: Session,
+) -> None:
+    """C-08 D1: el hook no rompe el flujo sin pago ni inventa devoluciones."""
+    from app.domain.turnos.estados import transition
+    from app.infra.db.models import Devolucion
+
+    turno_id = _sembrar(db_session, "confirmado")
+    transition(db_session, turno_id, "cancelado",
+               actor_tipo="recepcionista", actor_id="rec-1")
+    db_session.commit()
+
+    assert db_session.query(Devolucion).count() == 0
+
+
+def test_confirmado_a_atendido_con_pago_no_crea_devolucion_borde(
+    db_session: Session,
+) -> None:
+    """C-08 D1: el alta de devolución es exclusiva de `confirmado→cancelado`."""
+    import uuid as _uuid
+    from decimal import Decimal as _Decimal
+
+    from app.domain.turnos.estados import transition
+    from app.infra.db.models import Devolucion, Pago, Turno
+
+    turno_id = _sembrar(db_session, "confirmado")
+    turno = db_session.get(Turno, turno_id)
+    assert turno is not None
+    pago = Pago(turno_id=turno_id, odontologo_id=turno.odontologo_id,
+                monto=_Decimal("10000.00"), moneda="ARS", proveedor="simulado",
+                mp_payment_id=f"sim_pay_{_uuid.uuid4()}", estado="aprobado",
+                idempotency_key=f"idem-{_uuid.uuid4().hex[:12]}")
+    db_session.add(pago)
+    db_session.commit()
+    turno.pago_id = pago.id
+    db_session.commit()
+
+    transition(db_session, turno_id, "atendido",
+               actor_tipo="odontologo", actor_id="od-1")
+    db_session.commit()
+
+    assert db_session.query(Devolucion).count() == 0
+
