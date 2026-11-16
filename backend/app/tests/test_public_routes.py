@@ -6,10 +6,14 @@
 - excepción infra documentada: `GET /api/health` sigue pública.
 """
 
+import uuid
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api import PUBLIC_ROUTES
+from app.core.security.jwt import create_access_token
+from app.tests.conftest import TEST_AUTH_SECRET
 
 
 def test_registro_exactamente_6_rutas_03s3_feliz() -> None:
@@ -45,3 +49,27 @@ def test_ruta_desconocida_404_cerrada_por_construccion(auth_client: TestClient) 
 
 def test_health_sigue_publica_infra(auth_client: TestClient) -> None:
     assert auth_client.get("/api/health").status_code == 200
+
+
+def test_devoluciones_no_publicas_p12(auth_client: TestClient) -> None:
+    """C-08 3.5: las rutas nuevas exigen JWT staff y no entran en PUBLIC_ROUTES."""
+    dev_id = uuid.uuid4()
+    rutas = [
+        ("GET", "/api/devoluciones", None),
+        ("GET", f"/api/devoluciones/{dev_id}", None),
+        ("POST", f"/api/devoluciones/{dev_id}/aprobar", {"monto_confirmado": "1.00"}),
+        ("POST", f"/api/devoluciones/{dev_id}/rechazar", {"motivo": "x"}),
+    ]
+    for metodo, path, cuerpo in rutas:
+        r = auth_client.request(metodo, path, json=cuerpo)
+        assert r.status_code == 401, (metodo, path, r.status_code)
+
+    token = create_access_token(
+        sub=str(uuid.uuid4()), rol="paciente", secret=TEST_AUTH_SECRET
+    )
+    r = auth_client.get(
+        "/api/devoluciones", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert r.status_code == 403
+
+    assert not any("devolucion" in ruta.lower() for ruta in PUBLIC_ROUTES)

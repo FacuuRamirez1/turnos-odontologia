@@ -21,12 +21,12 @@
 
 ## 3. Bandeja: lectura, aprobación y rechazo con RBAC
 
-- [ ] 3.1 `DevolucionRepository.scoped(ident)` (scope forzado en repositorio, P8) + `domain/devoluciones/estados.py` (tabla de transiciones app → 409) con tests unitarios de scope y de transiciones
-- [ ] 3.2 `api/devoluciones.py` `GET /api/devoluciones?estado=` y `GET /api/devoluciones/{id}` (schemas `extra='forbid'`, campo `marca`) + router en `main.py`; `test_devoluciones_bandeja.py`: recepcionista ve todas con "(simulado)" (feliz), odontólogo A → 403 en devolución de B (error), sin JWT → 401 / token de paciente → 403 / odontólogo sin `odontologo_id` → 403 (borde)
-- [ ] 3.3 `POST /api/devoluciones/{id}/aprobar` con `monto_confirmado`: aprobación registra `aprobada_por/at` + `evento_pago(devolucion_aprobada)` con actor y monto (feliz); monto distinto → 422 `MONTO_NO_COINCIDE` sin evento (error); aprobar `aprobada|rechazada|ejecutada` → 409 `TRANSICION_DEVOLUCION_INVALIDA`; 60 % sin acción queda `pendiente` (borde Q4); recepcionista aprueba devolución de otro profesional; odontólogo ajeno → 403 sin evento
-- [ ] 3.4 `POST /api/devoluciones/{id}/rechazar` con motivo obligatorio: rechazo registra `rechazada_por/at/motivo` + `evento_pago(devolucion_rechazada)`, turno `cancelado` y pago `aprobado` sin cambios (feliz); motivo vacío → 422 (error); rechazar `aprobada|ejecutada|rechazada` → 409 (borde); odontólogo ajeno → 403
-- [ ] 3.5 Verificar `test_rbac_matrix.py` / `test_public_routes.py`: las rutas nuevas exigen JWT staff y la lista de 6 rutas públicas no cambia (P12)
-- [ ] 3.6 Checkpoint de revisión humana: matriz RBAC de la bandeja
+- [x] 3.1 `DevolucionRepository.scoped(ident)` (scope forzado en repositorio, P8) + `domain/devoluciones/estados.py` (tabla de transiciones app → 409) con tests unitarios de scope y de transiciones
+- [x] 3.2 `api/devoluciones.py` `GET /api/devoluciones?estado=` y `GET /api/devoluciones/{id}` (schemas `extra='forbid'`, campo `marca`) + router en `main.py`; `test_devoluciones_bandeja.py`: recepcionista ve todas con "(simulado)" (feliz), odontólogo A → 403 en devolución de B (error), sin JWT → 401 / token de paciente → 403 / odontólogo sin `odontologo_id` → 403 (borde)
+- [x] 3.3 `POST /api/devoluciones/{id}/aprobar` con `monto_confirmado`: aprobación registra `aprobada_por/at` + `evento_pago(devolucion_aprobada)` con actor y monto (feliz); monto distinto → 422 `MONTO_NO_COINCIDE` sin evento (error); aprobar `aprobada|rechazada|ejecutada` → 409 `TRANSICION_DEVOLUCION_INVALIDA`; 60 % sin acción queda `pendiente` (borde Q4); recepcionista aprueba devolución de otro profesional; odontólogo ajeno → 403 sin evento
+- [x] 3.4 `POST /api/devoluciones/{id}/rechazar` con motivo obligatorio: rechazo registra `rechazada_por/at/motivo` + `evento_pago(devolucion_rechazada)`, turno `cancelado` y pago `aprobado` sin cambios (feliz); motivo vacío → 422 (error); rechazar `aprobada|ejecutada|rechazada` → 409 (borde); odontólogo ajeno → 403
+- [x] 3.5 Verificar `test_rbac_matrix.py` / `test_public_routes.py`: las rutas nuevas exigen JWT staff y la lista de 6 rutas públicas no cambia (P12)
+- [x] 3.6 Checkpoint de revisión humana: matriz RBAC de la bandeja — **APROBADO por el usuario el 2026-11-16** (scope P8 por JOIN turno, 403 vs 404 sin fuga de datos, 409/422 con evento solo tras validación)
 
 ## 4. Ejecución idempotente vía puerto + webhook
 
