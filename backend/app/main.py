@@ -9,6 +9,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.agenda import router as agenda_router
 from app.api.auth import router as auth_router
+from app.api.comprobantes import router as comprobantes_router
 from app.api.devoluciones import router as devoluciones_router
 from app.api.disponibilidad import router as disponibilidad_router
 from app.api.health import router as health_router
@@ -52,6 +53,7 @@ app.include_router(odontologos_router, prefix="/api")
 app.include_router(pacientes_router, prefix="/api")
 app.include_router(pagos_router, prefix="/api")
 app.include_router(devoluciones_router, prefix="/api")
+app.include_router(comprobantes_router, prefix="/api")
 app.include_router(publica_disponibilidad_router, prefix="/api")
 app.include_router(reservas_router, prefix="/api")
 app.include_router(agenda_router, prefix="/api")

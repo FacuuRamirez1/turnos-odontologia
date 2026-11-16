@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security.dependencies import Identity, require_role
 from app.core.settings import get_settings
+from app.domain.comprobantes.service import emitir_recibo_devolucion, emitir_recibo_pago
 from app.domain.notificaciones.outbox import encolar_confirmacion
 from app.domain.pagos.proveedor import TipoAccionPago
 from app.domain.pagos.repositories import EventoPagoRepository
@@ -221,6 +222,9 @@ def _procesar_webhook_pago(
         except Exception:
             transicionado = False
 
+    if estado_interno == "aprobado":
+        emitir_recibo_pago(db, pago)
+
     return {
         "pago": pago,
         "turno": turno,
@@ -366,6 +370,8 @@ def _procesar_webhook_devolucion(
         actor_id="sistema",
         motivo=f"devolución {mp_refund_id} ejecutada",
     )
+
+    emitir_recibo_devolucion(db, devolucion)
 
     return {
         "pago": pago,
