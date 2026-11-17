@@ -64,6 +64,14 @@
       "sessions": 1,
       "memories": 28,
       "prompts": 0
+    },
+    {
+      "id": "975f74d0",
+      "created_by": "mnvva",
+      "created_at": "2026-11-17T12:06:10.7682588Z",
+      "sessions": 1,
+      "memories": 3,
+      "prompts": 0
     }
   ]
 }
