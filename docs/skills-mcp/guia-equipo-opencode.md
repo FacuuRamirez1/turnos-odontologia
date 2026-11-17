@@ -2,7 +2,7 @@
 
 > Esta guía reemplaza a la versión del TP de Skills + MCP. Ahora el objetivo es el **Trabajo Práctico Integrador (TPI) de Metodología I**: llevar el proyecto fundado a un **sistema funcionando** mediante changes completos (propuestos, aplicados, verificados y archivados), integrando la **skill propia** y el **MCP** con evidencia de uso real en esos changes.
 >
-> Meta del equipo: **completar todos los changes del roadmap** (`C-11`, `C-12`, `C-13`). `C-08` quedó archivado el **16/11/2026** y **`C-10`** quedó implementado, verificado y archivado el **17/11/2026**. El mínimo exigido por la cátedra es menor (`8`), pero cada change que se cuente debe estar completo y probado.
+> Meta del equipo: **completar el sistema hasta `C-11` (`frontend-agenda-backoffice`)** y cerrar con documentación y video. **`C-08`** (16/11), **`C-10`** (17/11) y **`C-11`** (17/11) ya quedaron completos, probados y archivados (`12` changes válidos). Quedan declarados como **pendientes**: `C-12` y `C-13`.
 
 ---
 
@@ -10,18 +10,16 @@
 
 | Concepto | Estado |
 |---|---|
-| **Changes archivados** (`openspec/changes/archive/`) | `C-01`, `C-02`, `C-03`, `C-04`, `C-05`, `C-06`, `C-07F`, `C-07`, `C-09`, **`C-08`** (`2026-11-16-c-08-devoluciones-comprobantes-conciliacion`) y **`C-10`** (`2026-11-17-c-10-frontend-reserva-publica`) — **11 changes completos**. |
-| **Pendientes** | `C-11` (`frontend-agenda-backoffice`), `C-12` (`reportes-exportaciones`) y `C-13` (`hardening-cumplimiento-cierre`) (ver [CHANGES.md](../../CHANGES.md)). `C-11` ya está desbloqueado. |
+| **Changes archivados** (`openspec/changes/archive/`) | `C-01`, `C-02`, `C-03`, `C-04`, `C-05`, `C-06`, `C-07F`, `C-07`, `C-09`, **`C-08`**, **`C-10`** y **`C-11`** — **12 changes completos**. |
+| **Pendientes** | `C-12` (`reportes-exportaciones`) y `C-13` (`hardening-cumplimiento-cierre`) (ver [CHANGES.md](../../CHANGES.md)). |
 | **Migraciones** | Head actual = **`006_devolucion_comprobante`** (`C-08`). `C-09` → `004`, `C-07` → `005`. Aplicar `006` **antes** del seed. |
-| **Novedades de `C-10` (17/11)** | Frontend público completo en `/reservar`, `/checkout-simulado`, `/mail/confirmar`, `/mail/cancelar`, `/mis-turnos` (con `cotizar-cancelacion` + `reprogramar` aviso `Q3`) y `/precios`; costuras backend (`GET /api/precios`, `ReservaOut.pago_id`, JSON en `/api/mail/*`). |
-| **Pruebas vigentes** | Backend: `483 passed` (`pytest backend/app/tests`); Frontend: `7` archivos / `41 passed` (`vitest run`), `typecheck`, `lint` y `build` en verde. |
+| **Novedades de `C-10` y `C-11` (17/11)** | SPA pública completa (`C-10`) + Backoffice completo (`C-11`): navegación `/agenda` y `/bandeja`, disponibilidad/bloqueos, reserva telefónica `Q10` (solo recepción/admin), cancelar/reprogramar staff, trazabilidad auditable, devoluciones manuales (`Q4`) y descarga de recibos PDF `"(simulado)"`. |
+| **Pruebas vigentes** | Backend: `483 passed` (`pytest backend/app/tests`); Frontend: `10` archivos / `51 passed` (`vitest run`), `typecheck`, `lint` y `build` en verde. |
 | **Skill propia** | `validador-escenarios-turnos` en [SKILL.md](../../.agents/skills/validador-escenarios-turnos/SKILL.md), indexada en [.atl/skill-registry.md](../../.atl/skill-registry.md) y referenciada en [AGENTS.md](../../AGENTS.md) / [CLAUDE.md](../../CLAUDE.md). |
 | **MCP** | Context7 (`@upstash/context7-mcp`) en [opencode.json](../../opencode.json), sin secretos. |
-| **Evidencia acumulada** | [investigacion.md](investigacion.md), [aplicacion.md](aplicacion.md) y [evidencias/](evidencias/): TP (`mcp-context7-ejecucion.md`, `skill-validador-ejecucion.md`), `skill-c08-propose.md`, `mcp-c08-apply.md` (grupos 1–8) y `mcp-c10-apply.md` (con corrección `P12`). |
+| **Evidencia acumulada y video** | [investigacion.md](investigacion.md), [aplicacion.md](aplicacion.md), [guion-video-tpi.md](guion-video-tpi.md) y [evidencias/](evidencias/) (`mcp-context7-ejecucion.md`, `skill-validador-ejecucion.md`, `skill-c08-propose.md`, `mcp-c08-apply.md`, `mcp-c10-apply.md`, `skill-c11-propose.md`, `mcp-c11-apply.md`). |
 
-> Las restricciones del TP anterior (no implementar ni archivar `C-10`, no tocar `backend/` ni `frontend/`) **ya no rigen**.
->
-> **Mínimo del TPI**: somos **4 integrantes**, así que el mínimo es **8 changes válidos** (2 × 4). Hoy hay **11 changes archivados y verificados**.
+> **Mínimo del TPI**: somos **4 integrantes**, así que el mínimo es **8 changes válidos** (2 × 4). Ya tenemos **12 changes archivados y verificados**.
 
 ---
 
@@ -63,21 +61,20 @@ Ciclo por cada change (siempre en este orden y sin saltear el archivado formal):
 
 | Orden | Change | Observación |
 |---|---|---|
-| 1 | `C-11` `frontend-agenda-backoffice` | **Próximo change inmediato.** Frontend staff: agenda por profesional, reservas telefónicas, fichas y UI de bandeja de devoluciones (ya desbloqueada por `C-08`). |
-| 2 | `C-12` `reportes-exportaciones` | Backend y UI mínima en `reportes/`: conteos, caja simulada, exportación CSV/PDF y auditoría. |
-| 3 | `C-13` `hardening-cumplimiento-cierre` | Cierre: hardening, retención, rate-limit, flags v2 apagados, seed final y verificación E2E. |
+| 1 | `C-12` `reportes-exportaciones` | **Próximo change opcional si el equipo decide avanzar.** Backend y UI mínima en `reportes/`: conteos, caja simulada, exportación CSV/PDF y auditoría. |
+| 2 | `C-13` `hardening-cumplimiento-cierre` | Cierre: hardening, retención, rate-limit, flags v2 apagados, seed final y verificación E2E. |
 
 **Antes de pasar al siguiente change**, verificar que el anterior tenga: tasks completas, tests automatizados en verde, funcionamiento real comprobado (backend con Swagger o frontend con backend levantado), `openspec validate --all` sin errores, archivado y `CHANGES.md` en `[x]`.
 
 **Si el tiempo no alcanza**: es válido entregar un alcance parcial, siempre que lo declarado esté completo. En ese caso los changes sin terminar quedan `[ ] pendiente` y se listan aparte en el README y en el video. No se archiva nada incompleto.
 
-### 4.1 Qué hacer ahora (estado tras archivar `C-10` — 17/11)
+### 4.1 Qué hacer ahora (estado tras archivar `C-11` — 17/11)
 
-`C-08` (`2026-11-16-c-08-devoluciones-comprobantes-conciliacion`) y **`C-10`** (`2026-11-17-c-10-frontend-reserva-publica`) ya quedaron archivados y marcados `[x]` en `CHANGES.md`. Próximos pasos concretos:
+`C-08`, `C-10` y **`C-11`** (`2026-11-17-c-11-frontend-agenda-backoffice`) ya quedaron archivados y marcados `[x]` en `CHANGES.md`. Próximos pasos concretos para cerrar el TPI:
 
-1. **Proponer e implementar `C-11` (`frontend-agenda-backoffice`)**: con `/opsx:propose c-11-frontend-agenda-backoffice` + validación con `validador-escenarios-turnos`.
-2. **Continuar con `C-12` y `C-13`** manteniendo la evidencia en `docs/skills-mcp/evidencias/` por cada uso real de skill o MCP Context7.
-3. **Cada integrante**: confirmar commits propios (`P7`, sin co-autoría de IA) y repartir qué change completo con tests ejecutados explicará cada uno en el video (≤ 10 min).
+1. **Grabar el video de hasta 10 minutos** siguiendo [guion-video-tpi.md](guion-video-tpi.md) (todos los integrantes participan con cámara al presentarse, muestran tests en vivo, skill + MCP con Antes/Después y flujo E2E completo).
+2. **Armar el `.txt` de entrega** (`TPI-C?-Apellido1-Apellido2-Apellido3-Apellido4.txt`) siguiendo la plantilla de [guion-video-tpi.md](guion-video-tpi.md) y comprobar permisos de acceso del link de video y GitHub.
+3. **Opcional post-entrega**: si quieren seguir completando el roadmap después, proponer e implementar `C-12` y `C-13`.
 
 ---
 

@@ -13,8 +13,11 @@
 
 ---
 
-## 2. Evidencia de uso en los changes del TPI (`C-08` y `C-10`)
+## 2. Evidencia de uso en los changes del TPI (`C-08`, `C-10` y `C-11`)
 
+- **`C-11` (`frontend-agenda-backoffice`, archivado en [2026-11-17-c-11-frontend-agenda-backoffice](../../openspec/changes/archive/2026-11-17-c-11-frontend-agenda-backoffice/proposal.md))**:
+  - **Preparación (`propose`)**: [evidencias/skill-c11-propose.md](evidencias/skill-c11-propose.md) auditó RBAC de reserva telefónica (`odontologo` bloqueado), confirmación de `monto_confirmado` (`Q4`) y manejo `503` (`❌ → ✅`).
+  - **Implementación y verificación (`apply`)**: [evidencias/mcp-c11-apply.md](evidencias/mcp-c11-apply.md) registró consultas reales a `Context7 v4.7.3` (`NavLink` + `findByRole`) y la corrección del badge de estado en `BandejaPage.tsx` (`StatusBadge` de turno vs `EstadoDevolucion`).
 - **`C-10` (`frontend-reserva-publica`, archivado en [2026-11-17-c-10-frontend-reserva-publica](../../openspec/changes/archive/2026-11-17-c-10-frontend-reserva-publica/proposal.md))**:
   - **Preparación (`propose`)**: [evidencias/mcp-context7-ejecucion.md](evidencias/mcp-context7-ejecucion.md) confirmó `useSearchParams` y routing declarativo; [evidencias/skill-validador-ejecucion.md](evidencias/skill-validador-ejecucion.md) auditó `specs/frontend-reserva-publica/spec.md` contra las 9 `RN-*` (`❌ → ✅`).
   - **Implementación y verificación (`apply`)**: [evidencias/mcp-c10-apply.md](evidencias/mcp-c10-apply.md) registró consultas a `Context7 v4.7.2` (`/websites/reactrouter` `MemoryRouter` y `/testing-library/react-testing-library` `cleanup()`) y la auditoría final de `validador-escenarios-turnos`, que detectó y corrigió el llamado a `GET /api/pagos/{id}` (staff-only según `P12`) desde `CheckoutSimuladoPage.tsx`.
@@ -54,3 +57,5 @@
 | [openspec/changes/archive/2026-11-17-c-10-frontend-reserva-publica/](../../openspec/changes/archive/2026-11-17-c-10-frontend-reserva-publica/proposal.md) | Archivado | Implementación completa (`backend` + `frontend`), `483` tests pytest y `41` tests Vitest, archivado y marcado `[x]` en [CHANGES.md](../../CHANGES.md). |
 | [evidencias/mcp-c10-apply.md](evidencias/mcp-c10-apply.md) | Creado | Evidencia `Context7` + auditoría `validador-escenarios-turnos` en el apply de `C-10` (incluye corrección `P12`). |
 | [evidencias/mcp-c08-apply.md](evidencias/mcp-c08-apply.md) | Actualizado | Consultas SQLAlchemy/Alembic (grupo 1) + FastAPI/Pydantic (grupos 2–8) aplicadas en `C-08`. |
+| [openspec/changes/archive/2026-11-17-c-11-frontend-agenda-backoffice/](../../openspec/changes/archive/2026-11-17-c-11-frontend-agenda-backoffice/proposal.md) | Archivado | Backoffice staff (`/agenda`, `/bandeja`, disponibilidad/bloqueos, `Q10`, trazabilidad, PDF) + `51` tests Vitest y `[x]` en [CHANGES.md](../../CHANGES.md). |
+| [evidencias/skill-c11-propose.md](evidencias/skill-c11-propose.md) y [evidencias/mcp-c11-apply.md](evidencias/mcp-c11-apply.md) | Creados | Validación de escenarios en `propose` + consultas Context7 `NavLink`/RTL y corrección `EstadoDevolucion` en `apply` de `C-11`. |

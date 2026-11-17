@@ -184,6 +184,7 @@ curl http://localhost:8000/api/health
 
 - **Salud**: `GET /api/health` (Swagger interactivo en `http://localhost:8000/docs`).
 - **Reserva pública (`C-10`)**: en `http://localhost:5173` están habilitadas `/reservar` (`/reserva`), `/checkout-simulado`, `/mail/confirmar`, `/mail/cancelar`, `/mis-turnos` (exige `dni + token`, P12) y `/precios` (D11), además de `GET /api/precios`.
+- **Backoffice staff (`C-11`, JWT obligatorio)**: en `http://localhost:5173/agenda` y `/bandeja` están habilitados agenda aislada por rol (`P8`), disponibilidad/bloqueos, reserva telefónica `Q10` (solo `recepcionista`/`admin`), cancelar/reprogramar staff, trazabilidad auditable y bandeja de devoluciones con recibos PDF simulados (`"(simulado)"`).
 - **Devoluciones, comprobantes y trazabilidad (`C-08`, staff-only JWT)**: `GET /api/devoluciones`, `GET /api/devoluciones/alertas`, `GET /api/devoluciones/{id}`, `POST /api/devoluciones/{id}/aprobar|rechazar|ejecutar`, `GET /api/comprobantes/{id}`, `GET /api/comprobantes/{id}/pdf` y `GET /api/turnos/{turno_id}/trazabilidad`.
 
 ## 4. Estructura del repositorio
@@ -245,22 +246,23 @@ Secretos solo vía env vars (P5).
 
 ## 7. Estado actual y roadmap
 
-- **Cerrados (verificado en `openspec/changes/archive/` y `CHANGES.md [x]`, 11 changes)**:
+- **Cerrados (verificado en `openspec/changes/archive/` y `CHANGES.md [x]`, 12 changes)**:
   `C-01` `foundation-setup`, `C-02` `core-models-usuarios-pacientes`, `C-03`
   `auth-jwt-rbac`, `C-04` `disponibilidad-slots`, `C-05` `reserva-turnos-estados`,
   `C-06` `ficha-paciente-consentimiento`, `C-07F` `frontend-interfaz-agenda`,
   `C-07` `pagos-mp-checkout-webhook` (modo simulado D14), `C-09`
-  `mails-recordatorios`, `C-08` `devoluciones-comprobantes-conciliacion` y
-  `C-10` `frontend-reserva-publica`.
+  `mails-recordatorios`, `C-08` `devoluciones-comprobantes-conciliacion`,
+  `C-10` `frontend-reserva-publica` y `C-11` `frontend-agenda-backoffice`.
 - **Total del roadmap**: 13 changes en 7 fases (`CHANGES.md`) + `C-07F` intermedio.
 - **Camino crítico (9)**: `C-01 → C-02 → C-03 → C-04 → C-05 → C-07 → C-08 → C-11 → C-13`.
-- **Pendientes**: `C-11` `frontend-agenda-backoffice` (desbloqueado por `C-08`),
-  `C-12` `reportes-exportaciones` y `C-13` `hardening-cumplimiento-cierre`.
+- **Pendientes**: `C-12` `reportes-exportaciones` y `C-13` `hardening-cumplimiento-cierre`.
 - **Nota**: head actual de migraciones = `006_devolucion_comprobante` (`C-08`). El
   `2026-11-05-c-07-frontend-interfaz-agenda` archivado en openspec corresponde a
   `C-07F` (frontend); `C-07` quedó en `2026-11-13-c-07-pagos-mp-checkout-webhook`,
-  `C-08` en `2026-11-16-c-08-devoluciones-comprobantes-conciliacion` y `C-10` en
-  `2026-11-17-c-10-frontend-reserva-publica`.
+  `C-08` en `2026-11-16-c-08-devoluciones-comprobantes-conciliacion`, `C-10` en
+  `2026-11-17-c-10-frontend-reserva-publica` y `C-11` en
+  `2026-11-17-c-11-frontend-agenda-backoffice`.
+- **Guion de demostración TPI**: [guion-video-tpi.md](docs/skills-mcp/guion-video-tpi.md).
 - **Pagos (D14, 2026-11-05)**: en el MVP la seña usa un proveedor simulado
   (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; la bandeja y el flujo
   de devoluciones/recibos (`C-08`) y reserva/checkout público (`C-10`) operan con
