@@ -21,6 +21,8 @@
 | **Evidencia acumulada** | [investigacion.md](investigacion.md), [aplicacion.md](aplicacion.md) y [evidencias/](evidencias/): TP anterior (`mcp-context7-ejecucion.md`, `skill-validador-ejecucion.md`), `skill-c08-propose.md` (veredicto ❌ → ✅) y `mcp-c08-apply.md`. En el TPI hay que sumar evidencia de **uso durante la implementación y verificación** de cada change nuevo. |
 
 > Las restricciones del TP anterior (no implementar ni archivar `C-10`, no tocar `backend/` ni `frontend/`) **ya no rigen**. Pasamos a implementar.
+>
+> **Mínimo del TPI**: 2 changes válidos por integrante (total = 2 × integrantes). Hoy hay **10 changes archivados**; para el mínimo solo cuentan los que estén completos, probados y verificados. Si el equipo tiene 4 integrantes, el mínimo sube a 8.
 
 ---
 
@@ -33,6 +35,10 @@
 5. **Todos los integrantes** participan y explican parte del trabajo en el video (cámara encendida en la presentación personal).
 6. **Datos ficticios** de pacientes (`P11`) y **cero secretos** en repo, entrega y video (`P5`).
 7. El equipo debe poder explicar, con palabras propias, qué problema resuelve cada change, qué generó o modificó y cómo se comprobó.
+
+> **Qué es un change relevante (TPI)**: un avance coherente y verificable del roadmap, con propósito claro y resultado útil. No cuentan divisiones artificiales de tareas menores (crear cada carpeta, cambiar textos o generar archivos vacíos para llegar al número).
+>
+> **El TPI integra los dos trabajos anteriores**: la skill propia y el MCP son **obligatorios**, aunque la entrega independiente del TP de Skills + MCP haya sido opcional. Pueden aplicarse en la preparación, la implementación o la verificación de un change, y sirven como evidencia aunque el change todavía no esté archivado (pero para el mínimo el change debe estar completo).
 
 ---
 
@@ -75,7 +81,8 @@ Ciclo por cada change (siempre en este orden y sin saltear el archivado formal):
 2. **Completar la evidencia de `C-08`**: [mcp-c08-apply.md](evidencias/mcp-c08-apply.md) solo cubre el **grupo 1** (SQLAlchemy/Alembic). Faltan las consultas de los grupos 2–8 (FastAPI/Pydantic, PDF, worker, tests) con solicitud, resultado y aporte. Es evidencia obligatoria del TPI y hoy está incompleta.
 3. **Actualizar `README.md`**: todavía dice head `005`, no menciona la `006`, ni los endpoints/flujo de devoluciones, ni `PAGO_MODO`, `MP_WEBHOOK_SECRET` o `WORKER_*`. Dejarlo reproducible antes del video.
 4. **Proponer `C-11`**: puede ir en paralelo con `C-10`; la bandeja backend de devoluciones ya existe.
-5. **Cada integrante**: confirmar commits propios (`P7`) y que su parte del video cubra un change completo con tests ejecutados.
+5. **Si falta para el mínimo**: pueden agregar un change intermedio acotado sobre lo ya implementado (como se hizo con `C-07F`), siempre con alcance completo, pruebas y archivado. Actualizar `CHANGES.md` explicando qué adelanta, reemplaza o reduce, sin duplicar trabajo.
+6. **Cada integrante**: confirmar commits propios (`P7`) y que su parte del video cubra un change completo con tests ejecutados.
 
 ---
 
@@ -237,6 +244,7 @@ Integrantes:
 ```
 
 - **No dejar campos de ejemplo** y comprobar que el docente pueda acceder al video y al repositorio.
+- **Subir el `.txt`** al espacio **Entrega TPI** de la comisión (C1, C3 o C4). Fechas y horarios se consultan en la tarea del campus.
 - El repo debe contener todo el avance: fundación, roadmap actualizado, artefactos SDD y changes archivados, código, tests, la skill propia y la documentación del MCP.
 - El **`README.md`** debe permitir reproducir lo presentado: requisitos, instalación, configuración de ejemplo sin secretos, datos ficticios, arranque de backend y frontend, acceso a Swagger, ejecución de tests, y una indicación clara de qué está completo y qué queda pendiente.
 
@@ -252,4 +260,4 @@ Integrantes:
 - [ ] El sistema arranca y permite ejecutar todo lo declarado; el README permite reproducirlo.
 - [ ] Sin secretos (`.env`, claves, tokens) en el repo, la entrega ni el video; solo datos ficticios.
 - [ ] Todos los integrantes hablan en el video y la duración total no supera los 10 minutos.
-- [ ] `.txt` completo con video, repositorio, cantidad de integrantes y nombres, con acceso verificado.
+- [ ] `.txt` completo con video, repositorio, cantidad de integrantes y nombres, con acceso verificado y subido al espacio **Entrega TPI** de la comisión.
