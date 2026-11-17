@@ -9,6 +9,7 @@ export interface ApiRequestOptions {
   method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   auth?: boolean;
+  headers?: Record<string, string>;
   signal?: AbortSignal;
 }
 
@@ -21,10 +22,10 @@ function parseJson(text: string): unknown {
 }
 
 export async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
-  const { method = "GET", body, auth = true, signal } = options;
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const { method = "GET", body, auth = true, headers: extraHeaders, signal } = options;
+  const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
 
-  if (body !== undefined) {
+  if (body !== undefined && headers["Content-Type"] === undefined) {
     headers["Content-Type"] = "application/json";
   }
 

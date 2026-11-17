@@ -37,7 +37,9 @@ class PagoSimuladoAdapter(ProveedorPago):
             "consumido": False,
             "expira_at": expira_at,
         }
-        checkout_url = f"{CHECKOUT_URL_BASE}?token={checkout_token}"
+        checkout_url = (
+            f"{CHECKOUT_URL_BASE}?pago_id={pago['id']}&token={checkout_token}"
+        )
         return checkout_url, checkout_token
 
     def ejecutar_accion(

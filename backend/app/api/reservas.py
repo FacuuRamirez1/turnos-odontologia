@@ -116,6 +116,7 @@ class ReservaOut(BaseModel):
     fin: datetime
     estado: str
     canal: str
+    pago_id: uuid.UUID | None = None
     checkout_url: str | None = None
     checkout_token: str | None = None
 
@@ -130,6 +131,7 @@ def _out(fila: Turno, checkout_url: str | None = None,
         fin=fila.fin,
         estado=str(fila.estado),
         canal=str(fila.canal),
+        pago_id=uuid.UUID(str(fila.pago_id)) if fila.pago_id else None,
         checkout_url=checkout_url,
         checkout_token=checkout_token,
     )
@@ -352,6 +354,9 @@ def reservar(
             status_code=422, content={"code": "SLOT_NO_DISPONIBLE", "detail": str(exc)})
     if not creado or pago is None:
         return JSONResponse(status_code=200, content=_out(fila).model_dump(mode="json"))
+    if pago.monto <= 0:
+        # C-10: seña $0 → no hay checkout que ofrecer; el turno se devuelve igual.
+        return _out(fila)
     # C-07: invocar adaptador SOLO tras commit local (nunca cobrar sin rastro).
     proveedor = get_proveedor_pago()
     checkout_url, checkout_token = proveedor.generar_checkout({
@@ -393,6 +398,8 @@ def reservar_telefonica(
             status_code=422, content={"code": "SLOT_NO_DISPONIBLE", "detail": str(exc)})
     if not creado or pago is None:
         return JSONResponse(status_code=200, content=_out(fila).model_dump(mode="json"))
+    if pago.monto <= 0:
+        return _out(fila)
     proveedor = get_proveedor_pago()
     checkout_url, checkout_token = proveedor.generar_checkout({
         "id": pago.id, "turno_id": pago.turno_id,

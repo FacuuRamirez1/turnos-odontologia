@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.core.security.dependencies import Identity, get_jwt_secret, require_role
@@ -80,6 +80,20 @@ def _error_html(titulo: str, mensaje: str, status: int) -> HTMLResponse:
     return _html(titulo, f"<p>{mensaje}</p>", status=status)
 
 
+def _quiere_json(request: Request) -> bool:
+    """Negociación mínima: `Accept: application/json` pide la respuesta SPA."""
+    return "application/json" in request.headers.get("accept", "").lower()
+
+
+def _respuesta(
+    request: Request, html: HTMLResponse, payload: dict[str, object],
+) -> HTMLResponse | JSONResponse:
+    """JSON estructurado para la SPA o HTML de C-09 para navegadores."""
+    if _quiere_json(request):
+        return JSONResponse(status_code=html.status_code, content=payload)
+    return html
+
+
 def _buscar_fila_por_hash(session: Session, token: str) -> RecordatorioMail | None:
     """Busca la fila por sha256(token) sin consumir (para distinguir replay)."""
     try:
@@ -139,29 +153,50 @@ def _escribir_historial(
     session.flush()
 
 
-@router.get("/confirmar", response_class=HTMLResponse)
+@router.get("/confirmar", response_class=HTMLResponse, response_model=None)
 def confirmar(
     request: Request,
     token: str = Query(...),
     db: Session = Depends(get_db),
-) -> HTMLResponse:
+) -> HTMLResponse | JSONResponse:
     """Confirma un turno `confirmado` desde el mail (idempotente, sin tocar el turno)."""
     # Rate-limit antes de consumir el token.
     if not get_mail_limiter().check_and_count(f"{MAIL_PREFIX}{_ip(request)}"):
-        return _error_html("Demasiadas solicitudes", "Intenta de nuevo en unos instantes.", 429)
+        return _respuesta(
+            request,
+            _error_html("Demasiadas solicitudes", "Intenta de nuevo en unos instantes.", 429),
+            {"ok": False, "accion": "confirmar", "code": "RATE_LIMIT",
+             "detail": "Intenta de nuevo en unos instantes."},
+        )
 
     fila, accion = _consumir_o_ya_procesado(db, token)
     if fila is None:
-        return _error_html("Token inválido o expirado", "El link ya no es válido.", 400)
+        return _respuesta(
+            request,
+            _error_html("Token inválido o expirado", "El link ya no es válido.", 400),
+            {"ok": False, "accion": "confirmar", "code": "TOKEN_INVALIDO",
+             "detail": "El link ya no es válido."},
+        )
     if accion == "ya_procesado":
-        return _html(
-            "Turno ya confirmado",
-            "<p>Este link ya fue usado. El turno ya está confirmado.</p>",
+        return _respuesta(
+            request,
+            _html(
+                "Turno ya confirmado",
+                "<p>Este link ya fue usado. El turno ya está confirmado.</p>",
+            ),
+            {"ok": True, "accion": "confirmar", "estado": "ya_procesado",
+             "turno_id": str(fila.turno_id),
+             "mensaje": "Este link ya fue usado. El turno ya está confirmado."},
         )
 
     turno = _turno_o_404(db, fila.turno_id)
     if str(turno.estado) != "confirmado":
-        return _error_html("Estado incompatible", "El turno ya no está confirmado.", 409)
+        return _respuesta(
+            request,
+            _error_html("Estado incompatible", "El turno ya no está confirmado.", 409),
+            {"ok": False, "accion": "confirmar", "code": "ESTADO_INCOMPATIBLE",
+             "detail": "El turno ya no está confirmado."},
+        )
 
     ahora = datetime.now(UTC)
     fila.estado = "confirmado_desde_mail"
@@ -170,34 +205,61 @@ def confirmar(
     _escribir_historial(db, turno.id, "paciente", str(turno.paciente_id),
                         "confirmado_desde_mail", ahora)
     db.commit()
-    return _html(
-        "Turno confirmado",
-        f"<p>Tu turno del {turno.inicio:%d/%m/%Y %H:%M} quedó confirmado. Gracias.</p>",
+    return _respuesta(
+        request,
+        _html(
+            "Turno confirmado",
+            f"<p>Tu turno del {turno.inicio:%d/%m/%Y %H:%M} quedó confirmado. Gracias.</p>",
+        ),
+        {"ok": True, "accion": "confirmar", "estado": "confirmado_desde_mail",
+         "turno_id": str(turno.id), "inicio": turno.inicio.isoformat(),
+         "mensaje": "Tu turno quedó confirmado. Gracias."},
     )
 
 
-@router.get("/cancelar", response_class=HTMLResponse)
+@router.get("/cancelar", response_class=HTMLResponse, response_model=None)
 def cancelar(
     request: Request,
     token: str = Query(...),
     db: Session = Depends(get_db),
-) -> HTMLResponse:
+) -> HTMLResponse | JSONResponse:
     """Cancela un turno `confirmado` desde el mail y muestra la cotización."""
     if not get_mail_limiter().check_and_count(f"{MAIL_PREFIX}{_ip(request)}"):
-        return _error_html("Demasiadas solicitudes", "Intenta de nuevo en unos instantes.", 429)
+        return _respuesta(
+            request,
+            _error_html("Demasiadas solicitudes", "Intenta de nuevo en unos instantes.", 429),
+            {"ok": False, "accion": "cancelar", "code": "RATE_LIMIT",
+             "detail": "Intenta de nuevo en unos instantes."},
+        )
 
     fila, accion = _consumir_o_ya_procesado(db, token)
     if fila is None:
-        return _error_html("Token inválido o expirado", "El link ya no es válido.", 400)
+        return _respuesta(
+            request,
+            _error_html("Token inválido o expirado", "El link ya no es válido.", 400),
+            {"ok": False, "accion": "cancelar", "code": "TOKEN_INVALIDO",
+             "detail": "El link ya no es válido."},
+        )
     if accion == "ya_procesado":
-        return _html(
-            "Turno ya cancelado",
-            "<p>Este link ya fue usado. El turno ya está cancelado.</p>",
+        return _respuesta(
+            request,
+            _html(
+                "Turno ya cancelado",
+                "<p>Este link ya fue usado. El turno ya está cancelado.</p>",
+            ),
+            {"ok": True, "accion": "cancelar", "estado": "ya_procesado",
+             "turno_id": str(fila.turno_id),
+             "mensaje": "Este link ya fue usado. El turno ya está cancelado."},
         )
 
     turno = _turno_o_404(db, fila.turno_id)
     if str(turno.estado) != "confirmado":
-        return _error_html("Estado incompatible", "El turno ya no está confirmado.", 409)
+        return _respuesta(
+            request,
+            _error_html("Estado incompatible", "El turno ya no está confirmado.", 409),
+            {"ok": False, "accion": "cancelar", "code": "ESTADO_INCOMPATIBLE",
+             "detail": "El turno ya no está confirmado."},
+        )
 
     inicio = turno.inicio
     if inicio.tzinfo is None:
@@ -211,13 +273,33 @@ def cancelar(
             motivo="cancelado_desde_mail", ahora=ahora,
         )
     except TransicionInvalida as exc:
-        return _error_html("No se puede cancelar", str(exc), 409)
+        return _respuesta(
+            request,
+            _error_html("No se puede cancelar", str(exc), 409),
+            {"ok": False, "accion": "cancelar", "code": "TRANSICION_INVALIDA",
+             "detail": str(exc)},
+        )
     except ActorNoAutorizado as exc:
-        return _error_html("No autorizado", str(exc), 403)
+        return _respuesta(
+            request,
+            _error_html("No autorizado", str(exc), 403),
+            {"ok": False, "accion": "cancelar", "code": "NO_AUTORIZADO",
+             "detail": str(exc)},
+        )
     except GuardaTemporalRechazada as exc:
-        return _error_html("No se puede cancelar", str(exc), 409)
+        return _respuesta(
+            request,
+            _error_html("No se puede cancelar", str(exc), 409),
+            {"ok": False, "accion": "cancelar", "code": "GUARDA_TEMPORAL",
+             "detail": str(exc)},
+        )
     except VersionConflict as exc:
-        return _error_html("Conflicto", str(exc), 409)
+        return _respuesta(
+            request,
+            _error_html("Conflicto", str(exc), 409),
+            {"ok": False, "accion": "cancelar", "code": "CONFLICTO",
+             "detail": str(exc)},
+        )
 
     fila.estado = "cancelado_desde_mail"
     fila.token_usado_at = ahora
@@ -236,14 +318,29 @@ def cancelar(
             "<p>La devolución quedó <strong>pendiente de revisión</strong> por la "
             f"administración. {marca_pago_actual()}</p>"
         )
+        devolucion_json: dict[str, object] | None = {
+            "id": str(devolucion.id),
+            "porcentaje": int(devolucion.porcentaje),
+            "monto": float(devolucion.monto),
+            "estado": str(devolucion.estado),
+        }
     else:
         detalle = (
             f"<p>Devolución de la seña: <strong>{porcentaje} %</strong>.</p>"
             "<p>No se generó una devolución para este turno.</p>"
         )
-    return _html(
-        "Turno cancelado",
-        f"<p>Turno del {turno.inicio:%d/%m/%Y %H:%M} cancelado.</p>{detalle}",
+        devolucion_json = None
+    return _respuesta(
+        request,
+        _html(
+            "Turno cancelado",
+            f"<p>Turno del {turno.inicio:%d/%m/%Y %H:%M} cancelado.</p>{detalle}",
+        ),
+        {"ok": True, "accion": "cancelar", "estado": "cancelado",
+         "turno_id": str(turno.id), "inicio": turno.inicio.isoformat(),
+         "porcentaje": porcentaje, "devolucion": devolucion_json,
+         "marca": marca_pago_actual(),
+         "mensaje": "Turno cancelado."},
     )
 
 

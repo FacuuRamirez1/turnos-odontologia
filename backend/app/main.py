@@ -18,6 +18,7 @@ from app.api.mis_turnos import router as mis_turnos_router
 from app.api.odontologos import router as odontologos_router
 from app.api.pacientes import router as pacientes_router
 from app.api.pagos import router as pagos_router
+from app.api.precios import router as precios_router
 from app.api.public_disponibilidad import router as publica_disponibilidad_router
 from app.api.reservas import router as reservas_router
 from app.api.turnos import router as turnos_router
@@ -53,6 +54,7 @@ app.include_router(disponibilidad_router, prefix="/api")
 app.include_router(odontologos_router, prefix="/api")
 app.include_router(pacientes_router, prefix="/api")
 app.include_router(pagos_router, prefix="/api")
+app.include_router(precios_router, prefix="/api")
 app.include_router(devoluciones_router, prefix="/api")
 app.include_router(comprobantes_router, prefix="/api")
 app.include_router(publica_disponibilidad_router, prefix="/api")
