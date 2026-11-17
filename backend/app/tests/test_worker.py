@@ -19,17 +19,23 @@ from app.infra.db.models import (
     Turno,
     Usuario,
 )
+from app.infra.smtp.client import SmtpMailer
 from app.workers.main import procesar_job
 
 
-class _FakeMailer:
+class _FakeMailer(SmtpMailer):
     def __init__(self, fail: bool = False) -> None:
         self.fail = fail
         self.llamadas: int = 0
         self.ultimo: dict[str, Any] | None = None
 
     def enviar(
-        self, destinatario: str, asunto: str, texto: str, html: str, adjuntos=None
+        self,
+        destinatario: str,
+        asunto: str,
+        texto: str,
+        html: str,
+        adjuntos: list[tuple[str, bytes, str]] | None = None,
     ) -> None:
         self.llamadas += 1
         self.ultimo = {

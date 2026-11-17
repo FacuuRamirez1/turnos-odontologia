@@ -16,7 +16,20 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.security.passwords import hash_password
-from app.infra.db.models import Bloqueo, Disponibilidad, Odontologo, Paciente, Usuario
+from app.infra.db.models import (
+    Bloqueo,
+    Comprobante,
+    Devolucion,
+    Disponibilidad,
+    EventoPago,
+    Odontologo,
+    Paciente,
+    Pago,
+    RecordatorioMail,
+    Turno,
+    TurnoHistorial,
+    Usuario,
+)
 
 # Password dev documentada (SOLO dev, nunca producción): C-03 hashea de verdad
 # y el spec § passwords exige que todo seed staff autentique con ella (P11: ficticia).
@@ -132,7 +145,7 @@ DISPONIBILIDAD: list[dict[str, Any]] = [
 ]
 
 # C-04: 1 feriado = 2 filas (D-BLOQ, una por profesional) + 1 bloqueo ejemplo.
-# Espeja `seed_data/feriados_bloqueos_ejemplo.json` (DNIs ficticios P11: n/a aquí).
+# Espeja `seed_data/feriados_bloqueos_ejemplo.json` (DNIs ficticios P11: n/a aqu��).
 CORDOBA_FERIADO_DESDE = datetime(2026, 12, 24, 0, 0)
 CORDOBA_FERIADO_HASTA = datetime(2026, 12, 26, 23, 59, 59)
 BLOQUEOS: list[dict[str, Any]] = [
@@ -158,10 +171,333 @@ BLOQUEOS: list[dict[str, Any]] = [
     }
 ]
 
+# C-08: 1 pago aprobado con recibo + 1 devolucion 60% ejecutada con recibo.
+# Proveedor simulado, ids/mp_* deterministicos, DNI ficticios (P11), idempotente.
+SEED_INICIO_APROBADO = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
+SEED_INICIO_DEVUELTO = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+ID_TURNO_PAGO_APROBADO = uuid.UUID("55555555-5555-4555-8555-555555555551")
+ID_TURNO_DEVUELTO = uuid.UUID("55555555-5555-4555-8555-555555555552")
+ID_PAGO_APROBADO = uuid.UUID("66666666-6666-4666-8666-666666666661")
+ID_PAGO_DEVUELTO = uuid.UUID("66666666-6666-4666-8666-666666666662")
+ID_DEVOLUCION_EJECUTADA = uuid.UUID("77777777-7777-4777-8777-777777777771")
+ID_COMPROBANTE_PAGO = uuid.UUID("88888888-8888-4888-8888-888888888881")
+ID_COMPROBANTE_DEVOLUCION = uuid.UUID("88888888-8888-4888-8888-888888888882")
+ID_EVENTO_PAGO_APROBADO_CREADO = uuid.UUID("99999999-9999-4999-8999-999999999901")
+ID_EVENTO_PAGO_APROBADO_WEBHOOK = uuid.UUID("99999999-9999-4999-8999-999999999902")
+ID_EVENTO_PAGO_DEVUELTO_CREADO = uuid.UUID("99999999-9999-4999-8999-999999999903")
+ID_EVENTO_PAGO_DEVUELTO_WEBHOOK = uuid.UUID("99999999-9999-4999-8999-999999999904")
+ID_EVENTO_DEV_SOLICITADA = uuid.UUID("99999999-9999-4999-8999-999999999905")
+ID_EVENTO_DEV_APROBADA = uuid.UUID("99999999-9999-4999-8999-999999999906")
+ID_EVENTO_DEV_EJECUTADA = uuid.UUID("99999999-9999-4999-8999-999999999907")
+ID_HIST_APROBADO_CREADO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1")
+ID_HIST_APROBADO_CONFIRMADO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2")
+ID_HIST_DEVUELTO_CREADO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3")
+ID_HIST_DEVUELTO_CONFIRMADO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4")
+ID_HIST_DEVUELTO_CANCELADO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5")
+ID_HIST_DEVUELTO_DEVUELTO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6")
+ID_RECORDATORIO_AVISO_DEVOLUCION = uuid.UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1")
+
+TURNOS: list[dict[str, Any]] = [
+    {
+        "id": ID_TURNO_PAGO_APROBADO,
+        "paciente_id": PACIENTES[0]["id"],
+        "odontologo_id": ID_ODONTO_1,
+        "inicio": SEED_INICIO_APROBADO,
+        "fin": SEED_INICIO_APROBADO.replace(minute=30),
+        "estado": "confirmado",
+        "canal": "web",
+        "idempotency_key": "seed-c08-turno-aprobado",
+        "version": 2,
+        "pago_id": ID_PAGO_APROBADO,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_DEVUELTO,
+        "paciente_id": PACIENTES[1]["id"],
+        "odontologo_id": ID_ODONTO_1,
+        "inicio": SEED_INICIO_DEVUELTO,
+        "fin": SEED_INICIO_DEVUELTO.replace(minute=30),
+        "estado": "devuelto",
+        "canal": "web",
+        "idempotency_key": "seed-c08-turno-devuelto",
+        "version": 4,
+        "pago_id": ID_PAGO_DEVUELTO,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+]
+
+PAGOS: list[dict[str, Any]] = [
+    {
+        "id": ID_PAGO_APROBADO,
+        "turno_id": ID_TURNO_PAGO_APROBADO,
+        "odontologo_id": ID_ODONTO_1,
+        "monto": Decimal("65000.00"),
+        "moneda": "ARS",
+        "proveedor": "simulado",
+        "mp_payment_id": "sim_pay_seed_c08_aprobado",
+        "mp_preference_id": None,
+        "estado": "aprobado",
+        "idempotency_key": "idem-seed-c08-pago-aprobado",
+        "is_active": True,
+    },
+    {
+        "id": ID_PAGO_DEVUELTO,
+        "turno_id": ID_TURNO_DEVUELTO,
+        "odontologo_id": ID_ODONTO_1,
+        "monto": Decimal("65000.00"),
+        "moneda": "ARS",
+        "proveedor": "simulado",
+        "mp_payment_id": "sim_pay_seed_c08_devuelto",
+        "mp_preference_id": None,
+        "estado": "reembolsado_parcial",
+        "idempotency_key": "idem-seed-c08-pago-devuelto",
+        "is_active": True,
+    },
+]
+
+DEVOLUCIONES: list[dict[str, Any]] = [
+    {
+        "id": ID_DEVOLUCION_EJECUTADA,
+        "pago_id": ID_PAGO_DEVUELTO,
+        "turno_id": ID_TURNO_DEVUELTO,
+        "monto": Decimal("39000.00"),
+        "porcentaje": 60,
+        "motivo": "cancelacion fuera de termino (seed C-08)",
+        "motivo_rechazo": None,
+        "estado": "ejecutada",
+        "idempotency_key": f"dev_{ID_PAGO_DEVUELTO}",
+        "mp_refund_id": "sim_refund_seed_c08_60",
+        "aprobada_por": ID_RECEP,
+        "aprobada_at": datetime(2026, 11, 4, 10, 0, tzinfo=UTC),
+        "rechazada_por": None,
+        "rechazada_at": None,
+        "ejecutada_por": ID_RECEP,
+        "ejecutada_at": datetime(2026, 11, 4, 10, 5, tzinfo=UTC),
+        "is_active": True,
+    },
+]
+
+COMPROBANTES: list[dict[str, Any]] = [
+    {
+        "id": ID_COMPROBANTE_PAGO,
+        "pago_id": ID_PAGO_APROBADO,
+        "devolucion_id": None,
+        "turno_id": ID_TURNO_PAGO_APROBADO,
+        "tipo": "recibo_interno",
+        "concepto": "pago",
+        "numero": "RI-SEEDC08-000001",
+        "monto": Decimal("65000.00"),
+        "moneda": "ARS",
+        "cae": None,
+        "emitida_at": datetime(2026, 11, 3, 12, 5, tzinfo=UTC),
+        "simulado": True,
+        "payload_json": {
+            "concepto": "pago",
+            "paciente_nombre": "Ana",
+            "paciente_apellido": "Ficticio/a",
+            "odontologo": f"odonto1@{DOMINIO}",
+            "fecha_turno": SEED_INICIO_APROBADO.isoformat(),
+            "porcentaje": None,
+            "monto": "65000.00",
+        },
+    },
+    {
+        "id": ID_COMPROBANTE_DEVOLUCION,
+        "pago_id": ID_PAGO_DEVUELTO,
+        "devolucion_id": ID_DEVOLUCION_EJECUTADA,
+        "turno_id": ID_TURNO_DEVUELTO,
+        "tipo": "recibo_interno",
+        "concepto": "devolucion",
+        "numero": "RI-SEEDC08-000002",
+        "monto": Decimal("39000.00"),
+        "moneda": "ARS",
+        "cae": None,
+        "emitida_at": datetime(2026, 11, 4, 10, 6, tzinfo=UTC),
+        "simulado": True,
+        "payload_json": {
+            "concepto": "devolucion",
+            "paciente_nombre": "Bruno",
+            "paciente_apellido": "Ficticio/a",
+            "odontologo": f"odonto1@{DOMINIO}",
+            "fecha_turno": SEED_INICIO_DEVUELTO.isoformat(),
+            "porcentaje": 60,
+            "monto": "39000.00",
+        },
+    },
+]
+
+EVENTOS_PAGO: list[dict[str, Any]] = [
+    {
+        "id": ID_EVENTO_PAGO_APROBADO_CREADO,
+        "pago_id": ID_PAGO_APROBADO,
+        "tipo_evento": "creado",
+        "payload_json": {"monto": "65000.00", "moneda": "ARS"},
+        "actor": "sistema",
+        "created_at": datetime(2026, 11, 3, 9, 0, tzinfo=UTC),
+    },
+    {
+        "id": ID_EVENTO_PAGO_APROBADO_WEBHOOK,
+        "pago_id": ID_PAGO_APROBADO,
+        "tipo_evento": "webhook_recibido",
+        "payload_json": {"kind": "pago", "status": "aprobado"},
+        "actor": "sistema",
+        "created_at": datetime(2026, 11, 3, 9, 1, tzinfo=UTC),
+    },
+    {
+        "id": ID_EVENTO_PAGO_DEVUELTO_CREADO,
+        "pago_id": ID_PAGO_DEVUELTO,
+        "tipo_evento": "creado",
+        "payload_json": {"monto": "65000.00", "moneda": "ARS"},
+        "actor": "sistema",
+        "created_at": datetime(2026, 11, 4, 9, 0, tzinfo=UTC),
+    },
+    {
+        "id": ID_EVENTO_PAGO_DEVUELTO_WEBHOOK,
+        "pago_id": ID_PAGO_DEVUELTO,
+        "tipo_evento": "webhook_recibido",
+        "payload_json": {"kind": "pago", "status": "aprobado"},
+        "actor": "sistema",
+        "created_at": datetime(2026, 11, 4, 9, 1, tzinfo=UTC),
+    },
+    {
+        "id": ID_EVENTO_DEV_SOLICITADA,
+        "pago_id": ID_PAGO_DEVUELTO,
+        "tipo_evento": "devolucion_solicitada",
+        "payload_json": {"porcentaje": 60, "monto": "39000.00", "actor_id": str(ID_RECEP)},
+        "actor": "recepcionista",
+        "created_at": datetime(2026, 11, 4, 9, 55, tzinfo=UTC),
+    },
+    {
+        "id": ID_EVENTO_DEV_APROBADA,
+        "pago_id": ID_PAGO_DEVUELTO,
+        "tipo_evento": "devolucion_aprobada",
+        "payload_json": {"porcentaje": 60, "monto": "39000.00", "actor_id": str(ID_RECEP)},
+        "actor": "recepcionista",
+        "created_at": datetime(2026, 11, 4, 10, 0, tzinfo=UTC),
+    },
+    {
+        "id": ID_EVENTO_DEV_EJECUTADA,
+        "pago_id": ID_PAGO_DEVUELTO,
+        "tipo_evento": "devolucion_ejecutada",
+        "payload_json": {
+            "porcentaje": 60,
+            "monto": "39000.00",
+            "mp_refund_id": "sim_refund_seed_c08_60",
+            "solicitado_por": str(ID_RECEP),
+        },
+        "actor": "sistema",
+        "created_at": datetime(2026, 11, 4, 10, 5, tzinfo=UTC),
+    },
+]
+
+TURNOS_HISTORIAL: list[dict[str, Any]] = [
+    {
+        "id": ID_HIST_APROBADO_CREADO,
+        "turno_id": ID_TURNO_PAGO_APROBADO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": "seed-c08",
+        "fecha": datetime(2026, 11, 3, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-08",
+    },
+    {
+        "id": ID_HIST_APROBADO_CONFIRMADO,
+        "turno_id": ID_TURNO_PAGO_APROBADO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "confirmado",
+        "actor_tipo": "sistema",
+        "actor_id": "sistema",
+        "fecha": datetime(2026, 11, 3, 9, 1, tzinfo=UTC),
+        "motivo": "pago aprobado via webhook (seed C-08)",
+    },
+    {
+        "id": ID_HIST_DEVUELTO_CREADO,
+        "turno_id": ID_TURNO_DEVUELTO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": "seed-c08",
+        "fecha": datetime(2026, 11, 4, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-08",
+    },
+    {
+        "id": ID_HIST_DEVUELTO_CONFIRMADO,
+        "turno_id": ID_TURNO_DEVUELTO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "confirmado",
+        "actor_tipo": "sistema",
+        "actor_id": "sistema",
+        "fecha": datetime(2026, 11, 4, 9, 1, tzinfo=UTC),
+        "motivo": "pago aprobado via webhook (seed C-08)",
+    },
+    {
+        "id": ID_HIST_DEVUELTO_CANCELADO,
+        "turno_id": ID_TURNO_DEVUELTO,
+        "estado_anterior": "confirmado",
+        "estado_nuevo": "cancelado",
+        "actor_tipo": "recepcionista",
+        "actor_id": str(ID_RECEP),
+        "fecha": datetime(2026, 11, 4, 9, 55, tzinfo=UTC),
+        "motivo": "cancelacion fuera de termino (seed C-08)",
+    },
+    {
+        "id": ID_HIST_DEVUELTO_DEVUELTO,
+        "turno_id": ID_TURNO_DEVUELTO,
+        "estado_anterior": "cancelado",
+        "estado_nuevo": "devuelto",
+        "actor_tipo": "sistema",
+        "actor_id": "sistema",
+        "fecha": datetime(2026, 11, 4, 10, 5, tzinfo=UTC),
+        "motivo": "devolucion sim_refund_seed_c08_60 ejecutada (seed C-08)",
+    },
+]
+
+RECORDATORIOS_MAIL: list[dict[str, Any]] = [
+    {
+        "id": ID_RECORDATORIO_AVISO_DEVOLUCION,
+        "turno_id": ID_TURNO_DEVUELTO,
+        "tipo": "aviso_devolucion",
+        "destinatario": "",
+        "plantilla_version": "v2",
+        "estado": "fallido",
+        "intentos": 0,
+        "ultimo_error": "paciente sin email (seed C-08)",
+        "proximo_intento_at": None,
+        "enviado_at": None,
+        "publicado_at": None,
+        "token_accion_hash": None,
+        "token_expira_at": None,
+        "token_usado_at": None,
+        "contexto_json": {
+            "porcentaje": 60,
+            "resultado": "ejecutada",
+            "monto": "39000.00",
+            "comprobante_id": str(ID_COMPROBANTE_DEVOLUCION),
+        },
+        "is_active": True,
+    },
+]
+
 
 def _insert_do_nothing(
     session: Session,
-    model: type[Usuario] | type[Odontologo] | type[Paciente] | type[Disponibilidad] | type[Bloqueo],
+    model: type[
+        Usuario
+        | Odontologo
+        | Paciente
+        | Disponibilidad
+        | Bloqueo
+        | Turno
+        | Pago
+        | Devolucion
+        | Comprobante
+        | EventoPago
+        | TurnoHistorial
+        | RecordatorioMail
+    ],
     rows: list[dict[str, Any]],
 ) -> None:
     """`INSERT … ON CONFLICT DO NOTHING` portable (PG prod, SQLite tests)."""
@@ -178,12 +514,19 @@ def _insert_do_nothing(
 
 
 def seed(session: Session) -> None:
-    """Aplica el seed dev; re-corridas no duplican (natural keys email/DNI)."""
+    """Aplica el seed dev; re-corridas no duplican (natural keys, IDs deterministas)."""
     _insert_do_nothing(session, Usuario, USUARIOS)
     _insert_do_nothing(session, Odontologo, PERFILES)
     _insert_do_nothing(session, Paciente, PACIENTES)
     _insert_do_nothing(session, Disponibilidad, DISPONIBILIDAD)
     _insert_do_nothing(session, Bloqueo, BLOQUEOS)
+    _insert_do_nothing(session, Turno, TURNOS)
+    _insert_do_nothing(session, Pago, PAGOS)
+    _insert_do_nothing(session, Devolucion, DEVOLUCIONES)
+    _insert_do_nothing(session, Comprobante, COMPROBANTES)
+    _insert_do_nothing(session, EventoPago, EVENTOS_PAGO)
+    _insert_do_nothing(session, TurnoHistorial, TURNOS_HISTORIAL)
+    _insert_do_nothing(session, RecordatorioMail, RECORDATORIOS_MAIL)
     session.commit()
 
 

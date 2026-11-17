@@ -22,17 +22,17 @@ class ProveedorPago(ABC):
     """Puerto de proveedor de pagos. Una implementación por modo (PAGO_MODO)."""
 
     @abstractmethod
-    def generar_checkout(self, pago: dict) -> tuple[str, str]:
+    def generar_checkout(self, pago: dict[str, object]) -> tuple[str, str]:
         """Genera `(checkout_url, checkout_token)` para un pago pendiente.
 
         El `checkout_token` es de 1 uso y vida corta; se almacena con
-        expiración para validación posterior en el sandbox/webhook.
+        expiraci��n para validaci��n posterior en el sandbox/webhook.
         """
 
     @abstractmethod
     def ejecutar_accion(
         self, pago_id: object, accion: TipoAccionPago, checkout_token: str,
-    ) -> dict:
+    ) -> dict[str, object]:
         """Ejecuta `accion` sobre el pago validando `checkout_token` (1 uso).
 
         Retorna un dict con `payload` (crudo, para el webhook) y `firma`

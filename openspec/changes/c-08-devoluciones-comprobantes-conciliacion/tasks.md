@@ -57,9 +57,9 @@
 
 ## 8. Seed y verificación integral
 
-- [ ] 8.1 `seed_dev.py`: 1 pago aprobado con recibo + 1 devolución 60 % ejecutada con recibo (proveedor `simulado`, ids sintéticos, DNI ficticios P11), idempotente; actualizar `test_seed_dev.py`
-- [ ] 8.2 E2E F2 en `test_f2_devolucion_e2e.py`: reserva → aprobación simulada (recibo de pago) → cancelación fuera de término → bandeja aprueba → ejecuta → turno `devuelto`, pago `reembolsado_parcial`, dos recibos, un `aviso_devolucion`, trazabilidad completa y conciliación sin alertas
-- [ ] 8.3 Correr suite completa + `ruff` + `mypy` en verde y comparar contra el baseline de 1.1 (sin regresiones)
+- [x] 8.1 `seed_dev.py`: 1 pago aprobado con recibo + 1 devolución 60 % ejecutada con recibo (proveedor `simulado`, ids sintéticos, DNI ficticios P11), idempotente; actualizar `test_seed_dev.py`
+- [x] 8.2 E2E F2 en `test_f2_devolucion_e2e.py`: reserva → aprobación simulada (recibo de pago) → cancelación fuera de término → bandeja aprueba → ejecuta → turno `devuelto`, pago `reembolsado_parcial`, dos recibos, un `aviso_devolucion`, trazabilidad completa y conciliación sin alertas
+- [x] 8.3 Correr suite completa + `ruff` + `mypy` en verde y comparar contra el baseline de 1.1 (sin regresiones)
 
 ## Workflow follow-up
 

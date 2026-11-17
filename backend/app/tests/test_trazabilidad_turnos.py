@@ -11,6 +11,7 @@ Escenarios (U2 feliz / negocio / borde):
 import uuid
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import cast
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -204,19 +205,19 @@ def _sembrar_traza_completa(db_session: Session, od_id: uuid.UUID) -> dict[str, 
         "turno": turno,
         "pago": pago,
         "devolucion": devolucion,
-        "recibos": {comprobante_pago.numero, comprobante_devolucion.numero},
+        "recibos": {str(comprobante_pago.numero), str(comprobante_devolucion.numero)},
     }
 
 
 def test_trazabilidad_completa_feliz(
     auth_client: TestClient, db_session: Session
 ) -> None:
-    """Feliz: turno devuelto enlaza pago, devolución, ambos recibos y eventos."""
+    """Feliz: turno devuelto enlaza pago, devoluci��n, ambos recibos y eventos."""
     od = _sembrar_odontologo(db_session, "a")
     ctx = _sembrar_traza_completa(db_session, od)
-    turno = ctx["turno"]
-    pago = ctx["pago"]
-    devolucion = ctx["devolucion"]
+    turno = cast(Turno, ctx["turno"])
+    pago = cast(Pago, ctx["pago"])
+    devolucion = cast(Devolucion, ctx["devolucion"])
 
     r = auth_client.get(
         f"/api/turnos/{turno.id}/trazabilidad",
@@ -252,11 +253,11 @@ def test_trazabilidad_completa_feliz(
 def test_odontologo_no_navega_trazabilidad_ajena_negocio(
     auth_client: TestClient, db_session: Session
 ) -> None:
-    """Negocio (P8): odontólogo A recibe 403 en la trazabilidad del turno de B."""
+    """Negocio (P8): odont��logo A recibe 403 en la trazabilidad del turno de B."""
     od_a = _sembrar_odontologo(db_session, "a2")
     od_b = _sembrar_odontologo(db_session, "b2")
     ctx = _sembrar_traza_completa(db_session, od_b)
-    turno = ctx["turno"]
+    turno = cast(Turno, ctx["turno"])
 
     r = auth_client.get(
         f"/api/turnos/{turno.id}/trazabilidad",

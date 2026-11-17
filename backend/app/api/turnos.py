@@ -9,6 +9,7 @@ respuesta lleva `marca = marca_pago_actual()` (P10/P15).
 
 import uuid
 from datetime import datetime
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict
@@ -183,7 +184,7 @@ def _evento_out(evento: EventoPago) -> EventoPagoTrazabilidadOut:
         id=uuid.UUID(str(evento.id)),
         tipo_evento=str(evento.tipo_evento),
         actor=str(evento.actor),
-        fecha=evento.created_at,
+        fecha=cast(datetime, evento.created_at),
         payload_json=payload,
     )
 

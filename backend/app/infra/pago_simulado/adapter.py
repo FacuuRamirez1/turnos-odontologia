@@ -26,10 +26,10 @@ class PagoSimuladoAdapter(ProveedorPago):
 
     def __init__(self, webhook_secret: str) -> None:
         self._webhook_secret = webhook_secret
-        self._tokens: dict[str, dict] = {}
+        self._tokens: dict[str, dict[str, object]] = {}
         self._devoluciones: dict[str, dict[str, object]] = {}
 
-    def generar_checkout(self, pago: dict) -> tuple[str, str]:
+    def generar_checkout(self, pago: dict[str, object]) -> tuple[str, str]:
         checkout_token = f"chk_{uuid.uuid4().hex}"
         expira_at = datetime.now(UTC) + timedelta(minutes=TOKEN_TTL_MIN)
         self._tokens[checkout_token] = {
@@ -42,13 +42,14 @@ class PagoSimuladoAdapter(ProveedorPago):
 
     def ejecutar_accion(
         self, pago_id: object, accion: TipoAccionPago, checkout_token: str,
-    ) -> dict:
+    ) -> dict[str, object]:
         token_data = self._tokens.get(checkout_token)
         if token_data is None:
-            raise ValueError("checkout_token inválido o inexistente")
-        if token_data["consumido"]:
+            raise ValueError("checkout_token invǭlido o inexistente")
+        if bool(token_data["consumido"]):
             raise ValueError("checkout_token ya consumido (1 uso, P12)")
-        if datetime.now(UTC) > token_data["expira_at"]:
+        expira_at = token_data["expira_at"]
+        if isinstance(expira_at, datetime) and datetime.now(UTC) > expira_at:
             raise ValueError("checkout_token expirado")
         if str(token_data["pago_id"]) != str(pago_id):
             raise ValueError("checkout_token no pertenece a este pago")

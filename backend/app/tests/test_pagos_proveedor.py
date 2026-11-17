@@ -15,7 +15,7 @@ from app.domain.pagos.proveedor import ProveedorPago, TipoAccionPago
 from app.infra.pago_simulado.adapter import PagoSimuladoAdapter
 
 
-def _make_pago() -> dict:
+def _make_pago() -> dict[str, object]:
     return {
         "id": uuid.uuid4(),
         "turno_id": uuid.uuid4(),
@@ -59,14 +59,15 @@ def test_adaptador_simulado_firma_evento_con_hmac_feliz() -> None:
     import hashlib
     import hmac
 
-    adapter = PagoSimuladoAdapter(webhook_secret="secreto-de-test-ficticio")
+    secret = "secreto-de-test-ficticio"
+    adapter = PagoSimuladoAdapter(webhook_secret=secret)
     pago = _make_pago()
     _, token = adapter.generar_checkout(pago)
     evento = adapter.ejecutar_accion(pago["id"], TipoAccionPago.APROBAR, token)
-    firma = evento["firma"]
-    payload = evento["payload"]
+    payload = str(evento["payload"])
+    firma = str(evento["firma"])
     esperado = hmac.new(
-        b"secreto-de-test-ficticio",
+        secret.encode("utf-8"),
         payload.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
@@ -103,12 +104,12 @@ def test_accion_rechazar_y_expirar_triangulate() -> None:
 
     evento_rechazo = adapter.ejecutar_accion(pago["id"], TipoAccionPago.RECHAZAR, token)
     assert evento_rechazo["accion"] == "rechazado"
-    assert "rechazado" in evento_rechazo["payload"]
+    assert "rechazado" in str(evento_rechazo["payload"])
 
     _, token2 = adapter.generar_checkout(pago)
     evento_expiracion = adapter.ejecutar_accion(pago["id"], TipoAccionPago.EXPIRAR, token2)
     assert evento_expiracion["accion"] == "expirado"
-    assert "expirado" in evento_expiracion["payload"]
+    assert "expirado" in str(evento_expiracion["payload"])
 
 
 def test_proveedor_pago_puerto_define_interfaz_feliz() -> None:

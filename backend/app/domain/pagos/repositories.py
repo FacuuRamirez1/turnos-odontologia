@@ -48,18 +48,14 @@ class PagoRepository(BaseRepository[Pago]):
         """Busca pago por idempotency_key dentro del scope (P4)."""
         return cast(
             Pago | None,
-            self._base_query().where(
-                Pago.idempotency_key == idempotency_key  # type: ignore[attr-defined]
-            ).first(),
+            self._base_query().where(Pago.idempotency_key == idempotency_key).first(),
         )
 
     def get_by_mp_payment_id(self, mp_payment_id: str) -> Pago | None:
         """Busca pago por mp_payment_id dentro del scope (idempotencia webhook)."""
         return cast(
             Pago | None,
-            self._base_query().where(
-                Pago.mp_payment_id == mp_payment_id  # type: ignore[attr-defined]
-            ).first(),
+            self._base_query().where(Pago.mp_payment_id == mp_payment_id).first(),
         )
 
 
@@ -77,13 +73,18 @@ class EventoPagoRepository(BaseRepository[EventoPago]):
         """Lista eventos de un pago, ordenados por created_at."""
         return list(
             self._session.query(EventoPago)
-            .filter(EventoPago.pago_id == pago_id)  # type: ignore[attr-defined]
-            .order_by(EventoPago.created_at)  # type: ignore[attr-defined]
+            .filter(EventoPago.pago_id == pago_id)
+            .order_by(EventoPago.created_at)
             .all()
         )
 
-    def add_evento(self, pago_id: object, tipo_evento: str,
-                   payload_json: dict, actor: str) -> EventoPago:
+    def add_evento(
+        self,
+        pago_id: object,
+        tipo_evento: str,
+        payload_json: dict[str, object],
+        actor: str,
+    ) -> EventoPago:
         """Inserta un evento append-only (solo INSERT, nunca UPDATE/DELETE)."""
         ev = EventoPago(pago_id=pago_id, tipo_evento=tipo_evento,
                         payload_json=payload_json, actor=actor)
