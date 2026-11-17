@@ -8,6 +8,7 @@ import { MailAccionPage } from "./pages/mail/MailAccionPage";
 import { MisTurnosPage } from "./pages/mis-turnos/MisTurnosPage";
 import { PreciosPage } from "./pages/precios/PreciosPage";
 import { CheckoutSimuladoPage } from "./pages/reserva/CheckoutSimuladoPage";
+import { ReportesPage } from "./pages/reportes/ReportesPage";
 import { ReservaPage } from "./pages/reserva/ReservaPage";
 
 export function App(): JSX.Element {
@@ -25,6 +26,7 @@ export function App(): JSX.Element {
         <Route element={<AppShell />}>
           <Route path="/agenda" element={<AgendaPage />} />
           <Route path="/bandeja" element={<BandejaPage />} />
+          <Route path="/reportes" element={<ReportesPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/agenda" replace />} />

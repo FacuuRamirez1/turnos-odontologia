@@ -48,6 +48,9 @@ export function AppShell(): JSX.Element {
             <NavLink to="/bandeja" className="button button--quiet">
               Bandeja de devoluciones
             </NavLink>
+            <NavLink to="/reportes" className="button button--quiet">
+              Reportes
+            </NavLink>
           </nav>
           <div className="session">
             {user !== null && (

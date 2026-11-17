@@ -376,7 +376,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ## FASE 6 — Reportes y cierre v1
 
 ### [C-12] `reportes-exportaciones`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Reportes mínimos de asistencia + exportación CSV/PDF de turnos y caja (épicas F2–F3, RN-AUDIT)
   - Endpoints: conteos por estado y período (asistencia/ausentismo), caja (pagos/devoluciones conciliadas; banner "(simulado)" en MVP, D14), solo roles autorizados (RBAC `03 §2`)
   - Exportación CSV/PDF de turnos y caja con filtros por odontólogo/período; auditoría exportable (D3: diferencial barato)

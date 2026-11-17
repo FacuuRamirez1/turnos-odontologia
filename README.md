@@ -183,6 +183,7 @@ curl http://localhost:8000/api/health
 ```
 
 - **Salud**: `GET /api/health` (Swagger interactivo en `http://localhost:8000/docs`).
+- **Reportes y exportaciones (`C-12`)**: staff-only (JWT; odontólogo ve solo lo propio, P8) bajo `/api/reportes`: `GET /asistencia`, `/caja`, `/mail` (JSON) y `/turnos.csv|pdf`, `/caja.csv|pdf`, `/auditoria.csv` (descarga). Parámetros `desde`, `hasta` (YYYY-MM-DD, máx. 366 días) y `odontologo_id` opcional (solo recepción/admin). La caja y sus exportaciones llevan la marca "(simulado)" con `PAGO_MODO=simulado`. No son rutas públicas (P12).
 - **Reserva pública (`C-10`)**: en `http://localhost:5173` están habilitadas `/reservar` (`/reserva`), `/checkout-simulado`, `/mail/confirmar`, `/mail/cancelar`, `/mis-turnos` (exige `dni + token`, P12) y `/precios` (D11), además de `GET /api/precios`.
 - **Backoffice staff (`C-11`, JWT obligatorio)**: en `http://localhost:5173/agenda` y `/bandeja` están habilitados agenda aislada por rol (`P8`), disponibilidad/bloqueos, reserva telefónica `Q10` (solo `recepcionista`/`admin`), cancelar/reprogramar staff, trazabilidad auditable y bandeja de devoluciones con recibos PDF simulados (`"(simulado)"`).
 - **Devoluciones, comprobantes y trazabilidad (`C-08`, staff-only JWT)**: `GET /api/devoluciones`, `GET /api/devoluciones/alertas`, `GET /api/devoluciones/{id}`, `POST /api/devoluciones/{id}/aprobar|rechazar|ejecutar`, `GET /api/comprobantes/{id}`, `GET /api/comprobantes/{id}/pdf` y `GET /api/turnos/{turno_id}/trazabilidad`.
