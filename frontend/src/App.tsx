@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgendaPage } from "./pages/agenda/AgendaPage";
+import { BandejaPage } from "./pages/bandeja/BandejaPage";
 import { LoginPage } from "./pages/login/LoginPage";
 import { MailAccionPage } from "./pages/mail/MailAccionPage";
 import { MisTurnosPage } from "./pages/mis-turnos/MisTurnosPage";
@@ -23,6 +24,7 @@ export function App(): JSX.Element {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppShell />}>
           <Route path="/agenda" element={<AgendaPage />} />
+          <Route path="/bandeja" element={<BandejaPage />} />
         </Route>
       </Route>
       <Route path="/" element={<Navigate to="/agenda" replace />} />

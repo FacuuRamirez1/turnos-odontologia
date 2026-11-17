@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -35,9 +35,20 @@ export function AppShell(): JSX.Element {
             <span className="brand__mark" aria-hidden="true" />
             <div>
               <p className="brand__title">Bitácora clínica</p>
-              <p className="brand__subtitle">Agenda de turnos</p>
+              <p className="brand__subtitle">
+                Backoffice v1 · Sin gestión de usuarios/roles, configuración de pagos/PAGO_MODO ni
+                ARCA
+              </p>
             </div>
           </div>
+          <nav className="wizard-actions" aria-label="Navegación staff">
+            <NavLink to="/agenda" className="button button--quiet">
+              Agenda
+            </NavLink>
+            <NavLink to="/bandeja" className="button button--quiet">
+              Bandeja de devoluciones
+            </NavLink>
+          </nav>
           <div className="session">
             {user !== null && (
               <p className="session__user">

@@ -6,7 +6,7 @@ const API_BASE_URL: string = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/
 export const AUTH_UNAUTHORIZED_EVENT = "auth:unauthorized";
 
 export interface ApiRequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   auth?: boolean;
   headers?: Record<string, string>;
@@ -53,4 +53,30 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
   }
 
   return payload as T;
+}
+
+export async function apiBlobFetch(path: string, signal?: AbortSignal): Promise<Blob> {
+  const headers: Record<string, string> = {};
+  const token = getAccessToken();
+  if (token !== null) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "GET",
+    headers,
+    credentials: "include",
+    signal,
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      window.dispatchEvent(new Event(AUTH_UNAUTHORIZED_EVENT));
+    }
+    const text = await response.text();
+    const payload: unknown = text.length === 0 ? null : parseJson(text);
+    throw buildApiError(response.status, payload);
+  }
+
+  return response.blob();
 }

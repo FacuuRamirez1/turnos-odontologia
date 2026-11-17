@@ -355,7 +355,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ---
 
 ### [C-11] `frontend-agenda-backoffice`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Agenda del día + gestión staff + bandeja de devoluciones UI (épicas C1–C3, B3, D2, F1 cara interna)
   - Agenda del día aislada por profesional (odontólogo: solo la suya; recepcionista: todas, solo lectura salvo acciones permitidas)
   - ABM disponibilidad/bloqueos por odontólogo, marcar `atendido/no_show`, cancelar/reprogramar con motivo + historial visible actor+fecha (B3)

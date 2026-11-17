@@ -299,7 +299,8 @@ input {
   font-weight: 650;
 }
 
-.field input {
+.field input,
+.field select {
   width: 100%;
   min-height: var(--target);
   padding: 0.5rem 0.75rem;
@@ -309,7 +310,8 @@ input {
   color: var(--ink);
 }
 
-.field input:hover {
+.field input:hover,
+.field select:hover {
   border-color: var(--mint);
 }
 
