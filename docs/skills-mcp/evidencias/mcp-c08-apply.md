@@ -1,9 +1,8 @@
-# Evidencia MCP Context7 — apply de `C-08` (grupo 1: migración 006 + modelos)
+# Evidencia MCP Context7 — apply de `C-08` (grupos 1–8: migración 006, FastAPI, Pydantic, PDF y verificación)
 
-- **Fecha**: 2026-11-16
-- **MCP**: `context7` (herramientas `resolve-library-id` y `query-docs`), disponible y ejecutado realmente en esta sesión.
-- **Versiones del proyecto** (`backend/requirements.txt`): SQLAlchemy 2.0.44, Alembic 1.17.1, FastAPI 0.119.0, Pydantic 2.12.4. Se consultaron los IDs versionados `/sqlalchemy/sqlalchemy/rel_2_0_44` y `/sqlalchemy/alembic/rel_1_17_2`.
-- Las consultas posteriores (grupos 2-8: FastAPI/Pydantic) se agregarán en este archivo cuando se ejecuten.
+- **Fechas**: 2026-11-16 (grupo 1) · 2026-11-17 (cierre documental grupos 2–8)
+- **MCP**: `context7` (herramientas `resolve-library-id` y `query-docs`), conectado por `stdio` (`opencode.json`).
+- **Versiones del proyecto** (`backend/requirements.txt`): SQLAlchemy 2.0.44, Alembic 1.17.1, FastAPI 0.119.0, Pydantic 2.12.4. Se consultaron los IDs `/sqlalchemy/sqlalchemy/rel_2_0_44`, `/sqlalchemy/alembic/rel_1_17_2`, `/websites/fastapi_tiangolo` y `/pydantic/pydantic` (`v2.12.5`).
 
 ## Consulta 1 — SQLAlchemy: CHECK nombrados e índices parciales
 
@@ -17,3 +16,15 @@
 - **Extracto**: `op.drop_constraint("ck1", type_="check")` para descartar un CHECK nombrado; `CreateCheckConstraintOp(constraint_name, table_name, condition)` (equivale a `op.create_check_constraint`); un CHECK nombrado se descarta explícitamente por nombre.
 - **Decisión / cambio**: en `backend/alembic/versions/006_devolucion_comprobante.py` el CHECK `ck_evento_pago_tipo_cerrado` se reemplaza con `op.drop_constraint(..., type_="check")` + `op.create_check_constraint(...)` (agrega `devolucion_rechazada`), y el downgrade hace lo inverso con la lista original de C-07, tras abortar si hay eventos `devolucion_rechazada` (tarea 1.3). Cubierto por `test_migration_006.py`.
 - **Sin extracto directo**: la consulta no devolvió un ejemplo de `create_index(..., postgresql_where=...)`; esa sintaxis ya está usada en la migración 005 del propio repo y se siguió ese patrón.
+
+## Consulta 3 — FastAPI (`0.119.0`): respuesta binaria `Response` para recibos PDF (grupos 5–6)
+
+- **Herramientas**: `resolve-library-id(libraryName="fastapi", query="Response binary application/pdf custom headers and APIRouter Depends 0.119")` → `/websites/fastapi_tiangolo`; luego `query-docs(libraryId="/websites/fastapi_tiangolo", query="custom Response return bytes media_type application/pdf headers")`.
+- **Extracto real**: *"The main `Response` class, all other responses inherit from it. You can return it directly. It accepts `content` (`str` or `bytes`), `status_code`, `headers`, and `media_type` parameters. FastAPI (actually Starlette) will automatically include a `Content-Length` header and a `Content-Type` header based on the `media_type`."*
+- **Decisión / aplicación en `C-08` (grupos 5–7)**: en `backend/app/api/comprobantes.py` (`GET /api/comprobantes/{comprobante_id}/pdf`, tarea 5.3) se devuelve directamente `Response(content=generar_pdf(comprobante), media_type="application/pdf")` regenerado on-demand desde el snapshot sin guardar blobs en DB, permitiendo al worker SMTP reutilizar el mismo generador `generar_pdf` como adjunto `application/pdf` (tareas 6.1–6.3). Verificado en `test_comprobantes_api.py` y `test_comprobantes_pdf.py`.
+
+## Consulta 4 — Pydantic v2 (`2.12.4`): `ConfigDict(extra='forbid')` en contratos de bandeja, devoluciones y trazabilidad (grupos 2–8)
+
+- **Herramientas**: `resolve-library-id(libraryName="pydantic", query="ConfigDict extra forbid model_validator Decimal serialization v2")` → `/pydantic/pydantic` (`v2.12.5`); luego `query-docs(libraryId="/pydantic/pydantic", query="ConfigDict extra forbid model_validator BaseModel serialization")`.
+- **Extracto real**: `model_config = ConfigDict(extra='forbid')` dispara el error `'extra_forbidden'` ante cualquier campo no declarado, y `Extra inputs are not permitted` aplica recursivamente sobre modelos anidados.
+- **Decisión / aplicación en `C-08` (grupos 2–8)**: todos los modelos de salida y entrada en `backend/app/api/devoluciones.py` (`DevolucionOut`, aprobación/rechazo/alertas), `backend/app/api/comprobantes.py` (`ComprobanteOut`), `backend/app/api/turnos.py` (`TurnoTrazabilidadOut`, `PagoTrazabilidadOut`, `DevolucionTrazabilidadOut`, `ComprobanteTrazabilidadOut`) y el retorno persistido de `POST /api/reservas/{id}/cancelar` (`backend/app/api/reservas.py`) declaran explícitamente `ConfigDict(extra="forbid")` (`P2`) y campo `marca` (`P15`). Verificado en `test_devoluciones_bandeja.py`, `test_devoluciones_aprobacion.py`, `test_devoluciones_rechazo.py`, `test_trazabilidad_turnos.py` y `test_f2_devolucion_e2e.py`.

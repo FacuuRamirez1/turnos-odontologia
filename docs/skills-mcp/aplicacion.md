@@ -13,11 +13,14 @@
 
 ---
 
-## 2. Evidencia de uso en la preparación de `C-10`
+## 2. Evidencia de uso en los changes del TPI (`C-08` y `C-10`)
 
-- **Change preparado**: [openspec/changes/c-10-frontend-reserva-publica/](../../openspec/changes/c-10-frontend-reserva-publica/proposal.md) (`proposal.md`, `specs/frontend-reserva-publica/spec.md`, `design.md`, `tasks.md`), referenciado en [CHANGES.md](../../CHANGES.md) manteniendo su estado `[ ] pendiente`.
-- **Aporte real del MCP Context7** ([evidencia MCP](evidencias/mcp-context7-ejecucion.md)): confirmó el contrato de `useSearchParams` y routing declarativo (`BrowserRouter`, `Routes`, `Route`) para las rutas `/checkout-simulado`, `/mail/confirmar`, `/mail/cancelar` y `/mis-turnos`, permitiendo redactar `D1` en `design.md` sin asumir APIs de memoria.
-- **Aporte real de `validador-escenarios-turnos`** ([evidencia skill](evidencias/skill-validador-ejecucion.md)): auditó los 5 requisitos y escenarios Gherkin de `specs/frontend-reserva-publica/spec.md` contra las 9 reglas `RN-*` y reglas duras `P1–P15`, asegurando cobertura explícita de **3 escenarios** (feliz, error de negocio y borde) trasladada luego a verificación TDD en `tasks.md`.
+- **`C-10` (`frontend-reserva-publica`, archivado en [2026-11-17-c-10-frontend-reserva-publica](../../openspec/changes/archive/2026-11-17-c-10-frontend-reserva-publica/proposal.md))**:
+  - **Preparación (`propose`)**: [evidencias/mcp-context7-ejecucion.md](evidencias/mcp-context7-ejecucion.md) confirmó `useSearchParams` y routing declarativo; [evidencias/skill-validador-ejecucion.md](evidencias/skill-validador-ejecucion.md) auditó `specs/frontend-reserva-publica/spec.md` contra las 9 `RN-*` (`❌ → ✅`).
+  - **Implementación y verificación (`apply`)**: [evidencias/mcp-c10-apply.md](evidencias/mcp-c10-apply.md) registró consultas a `Context7 v4.7.2` (`/websites/reactrouter` `MemoryRouter` y `/testing-library/react-testing-library` `cleanup()`) y la auditoría final de `validador-escenarios-turnos`, que detectó y corrigió el llamado a `GET /api/pagos/{id}` (staff-only según `P12`) desde `CheckoutSimuladoPage.tsx`.
+- **`C-08` (`devoluciones-comprobantes-conciliacion`, archivado en [2026-11-16-c-08-devoluciones-comprobantes-conciliacion](../../openspec/changes/archive/2026-11-16-c-08-devoluciones-comprobantes-conciliacion/proposal.md))**:
+  - **Preparación (`propose`)**: [evidencias/skill-c08-propose.md](evidencias/skill-c08-propose.md) validó escenarios, RBAC y devolución `0 % / 60 % / 100 %` (`❌ → ✅`).
+  - **Implementación (`apply` grupos 1–8)**: [evidencias/mcp-c08-apply.md](evidencias/mcp-c08-apply.md) documentó consultas reales a SQLAlchemy `2.0.44` (`CheckConstraint`, `postgresql_where`/`sqlite_where`), Alembic `1.17.1`, FastAPI (`Response` binaria PDF) y Pydantic `2.12` (`ConfigDict(extra='forbid')`).
 
 ---
 
@@ -48,5 +51,6 @@
 | [evidencias/mcp-context7-ejecucion.md](evidencias/mcp-context7-ejecucion.md) | Creado | Guardar salida JSON-RPC verbatim de `tools/list`, `resolve-library-id` y `query-docs` + hallazgo v6 vs v7. |
 | [evidencias/skill-validador-ejecucion.md](evidencias/skill-validador-ejecucion.md) | Creado | Documentar validación real Antes/Después de `C-10` con `validador-escenarios-turnos`. |
 | [docs/skills-mcp/aplicacion.md](aplicacion.md) | Creado | Informe final Parte 2 del TP integrando verificación, evidencia, crítica y trazabilidad. |
-| [openspec/changes/c-10-frontend-reserva-publica/](../../openspec/changes/c-10-frontend-reserva-publica/proposal.md) | Creado | Preparar `proposal.md`, `specs/frontend-reserva-publica/spec.md`, `design.md` y `tasks.md` para `C-10` (sin implementar). |
-| [CHANGES.md](../../CHANGES.md) | Modificado | Enlazar preparación OPSX en `C-10` preservando `- **Estado**: [ ] pendiente`. |
+| [openspec/changes/archive/2026-11-17-c-10-frontend-reserva-publica/](../../openspec/changes/archive/2026-11-17-c-10-frontend-reserva-publica/proposal.md) | Archivado | Implementación completa (`backend` + `frontend`), `483` tests pytest y `41` tests Vitest, archivado y marcado `[x]` en [CHANGES.md](../../CHANGES.md). |
+| [evidencias/mcp-c10-apply.md](evidencias/mcp-c10-apply.md) | Creado | Evidencia `Context7` + auditoría `validador-escenarios-turnos` en el apply de `C-10` (incluye corrección `P12`). |
+| [evidencias/mcp-c08-apply.md](evidencias/mcp-c08-apply.md) | Actualizado | Consultas SQLAlchemy/Alembic (grupo 1) + FastAPI/Pydantic (grupos 2–8) aplicadas en `C-08`. |

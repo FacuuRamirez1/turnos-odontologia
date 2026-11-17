@@ -78,16 +78,17 @@ documentan nombres y propósito — jamás valores reales (P5):
 | `JWT_REFRESH_DIAS` | TTL del refresh token, en días |
 | `JWT_ACTION_MIN` | TTL de tokens de acción por mail, en minutos |
 | `PAGO_MODO` | `simulado` (default MVP/dev) o `mercadopago` (diseñado, no construido en el MVP). **Nunca `simulado` en producción** (P15) |
-| `MP_WEBHOOK_SECRET` | Firma del webhook server-to-server; se usa también en modo simulado (el adaptador firma con HMAC) |
+| `MP_WEBHOOK_SECRET` | Firma HMAC del webhook server-to-server de pagos y devoluciones; obligatorio también en modo simulado |
 | `MP_ACCESS_TOKEN` / `MP_PUBLIC_KEY` | Opcionales: solo requeridas si `PAGO_MODO=mercadopago` (ficticias en dev) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` | Salida SMTP (en dev apuntan a MailHog) |
 | `MAIL_FROM` | Único remitente alineado autorizado (P14) |
 | `RECORDATORIO_VENTANA_HS` | Ventana de recordatorios por mail |
-| `RESERVA_TTL_MIN` | TTL de la pre-reserva de slot |
-| `RESERVA_RATE_LIMIT` | Rate-limit de `POST /reservas` por IP |
+| `MAIL_ACTION_TTL_MIN` / `MAIL_RATE_LIMIT` | TTL y rate-limit de links públicos `/api/mail/confirmar` y `/api/mail/cancelar` |
+| `RESERVA_TTL_MIN` / `RESERVA_RATE_LIMIT` | TTL de la pre-reserva de slot y rate-limit por IP |
 | `ANTICIPACION_MIN_HS` | Anticipación mínima configurable de slots |
 | `TIMEZONE` | Zona del consultorio (`America/Argentina/Cordoba`) |
-| `FRONTEND_URL` | URL pública del frontend |
+| `API_PUBLIC_URL` / `FRONTEND_URL` | URLs públicas de backend y frontend para links de mail |
+| `WORKER_SCHEDULER_TICK_S` / `WORKER_HEARTBEAT_FILE` | Tick del scheduler del worker de mails y ruta opcional de heartbeat en disco |
 | `WHATSAPP_ENABLED` / `ARCA_ENABLED` | Flags v2, siempre `false` en v1 (P13) |
 | `VITE_API_BASE_URL` | (solo `frontend/.env.example`) base URL pública de la API |
 | `API_PORT` / `WEB_PORT` / `PG_PORT` / `REDIS_PORT` / `MAILHOG_SMTP_PORT` / `MAILHOG_HTTP_PORT` | Overrides de puertos del Compose (defaults abajo) |
@@ -124,7 +125,8 @@ python -m alembic upgrade head
 Revisiones reales en `backend/alembic/versions/`:
 `001_core_v2off.py` (core + tablas v2 apagadas), `002_disponibilidad_bloqueo.py`,
 `003_turno_historial.py`, `004_recordatorio_mail.py`, `005_pago_evento_pago.py`
-(head actual tras C-07). Cero `create_all` en runtime (P3).
+y `006_devolucion_comprobante.py` (head actual tras `C-08`). Aplicar `upgrade head`
+**antes** de ejecutar `seed_dev`. Cero `create_all` en runtime (P3).
 
 ### Seed dev (datos ficticios, idempotente)
 
@@ -134,22 +136,29 @@ python -m app.infra.db.seed_dev
 ```
 
 Punto de entrada `main()` en `backend/app/infra/db/seed_dev.py` (asume la
-migración base aplicada). Inserta por natural-key con `ON CONFLICT DO NOTHING`:
+migración base `006` aplicada). Inserta por natural-key con `ON CONFLICT DO NOTHING`:
 2 odontólogos (L–V 9–17, 30 min, montos distintos), 1 recepcionista + 1 admin,
-5 pacientes con DNI ficticios y consentimiento, feriado + bloqueo de ejemplo.
-Sin escrituras v2 (P13), sin datos reales (P11). Re-corridas no duplican.
+5 pacientes con DNI ficticios y consentimiento, feriado + bloqueo de ejemplo,
+1 pago aprobado con recibo y 1 devolución 60 % ejecutada con recibo (todos
+simulados, D14). Sin escrituras v2 (P13), sin datos reales (P11). Re-corridas
+no duplican.
 
 ### Tests
 
 ```bash
 cd backend && python -m pytest app/tests/ -v   # o: pytest -q (como en CI; testpaths=app/tests)
-cd frontend && npm install && npm run typecheck
+cd frontend && npm install && npm run typecheck && npm run test
 ```
 
 Suite backend en `backend/app/tests/` (config `backend/pytest.ini`,
-convención `test_*.py`): salud, contrato de env, migraciones 001–004, seed,
+convención `test_*.py`): salud, contrato de env, migraciones 001–006, seed,
 auth JWT + RBAC + rate-limit, disponibilidad/motor de slots, reservas/estados/
-expiración TTL, ficha + consentimiento, aislamiento por profesional.
+expiración TTL, pagos simulados/webhook, devoluciones/comprobantes/conciliación
+(`test_f2_devolucion_e2e.py`), ficha + consentimiento, aislamiento por profesional,
+precios públicos y acciones de mail JSON/HTML. Suite frontend en Vitest + React
+Testing Library (`npm run test`): cliente público, wizard `/reservar`,
+`/checkout-simulado`, `/mail/*`, `/mis-turnos`, `/precios` e integración de
+rutas públicas.
 
 ### Linters y tipos
 
@@ -161,21 +170,21 @@ cd frontend && npm run build   # tsc --noEmit && vite build
 ```
 
 Scripts frontend reales (`frontend/package.json`): `dev` (vite), `build`
-(`tsc --noEmit && vite build`), `preview`, `typecheck` (`tsc --noEmit`), `lint`.
+(`tsc --noEmit && vite build`), `preview`, `typecheck` (`tsc --noEmit`), `lint`,
+`test` (`vitest run`).
 `tsconfig.json` estricto (`strict`, `noImplicitAny`, `strictNullChecks`,
 `noUnusedLocals/Parameters`); prohibido `any` (P1).
 
-### Health check
+### Health check y flujos implementados
 
 ```bash
 curl http://localhost:8000/api/health
 # {"status":"ok","service":"turnos-odontologia"}
 ```
 
-Endpoint real: `GET /api/health` (router `/health` con prefijo `/api` en
-`backend/app/main.py`, modelo `HealthResponse` con `extra="forbid"` en
-`backend/app/api/health.py`). El servicio `api` del Compose lo usa como
-healthcheck.
+- **Salud**: `GET /api/health` (Swagger interactivo en `http://localhost:8000/docs`).
+- **Reserva pública (`C-10`)**: en `http://localhost:5173` están habilitadas `/reservar` (`/reserva`), `/checkout-simulado`, `/mail/confirmar`, `/mail/cancelar`, `/mis-turnos` (exige `dni + token`, P12) y `/precios` (D11), además de `GET /api/precios`.
+- **Devoluciones, comprobantes y trazabilidad (`C-08`, staff-only JWT)**: `GET /api/devoluciones`, `GET /api/devoluciones/alertas`, `GET /api/devoluciones/{id}`, `POST /api/devoluciones/{id}/aprobar|rechazar|ejecutar`, `GET /api/comprobantes/{id}`, `GET /api/comprobantes/{id}/pdf` y `GET /api/turnos/{turno_id}/trazabilidad`.
 
 ## 4. Estructura del repositorio
 
@@ -184,18 +193,18 @@ healthcheck.
 ```text
 turnos-odontologia/
 ├── backend/                 # FastAPI + SQLAlchemy + Alembic (app, migraciones, tests)
-│   ├── app/api/             # Routers: health, auth, disponibilidad, reservas, agenda, pacientes, odontologos, mis-turnos
+│   ├── app/api/             # Routers: health, auth, disponibilidad, public_disponibilidad, reservas, agenda, pacientes, odontologos, pagos, precios, devoluciones, comprobantes, turnos, mis_turnos, mail
 │   ├── app/core/            # settings (env), security JWT/passwords, errors/envelope
-│   ├── app/domain/          # Lógica de dominio: turnos, disponibilidad, pagos, devoluciones, notificaciones, reportes, pacientes
+│   ├── app/domain/          # Lógica de dominio: turnos, disponibilidad, pagos, devoluciones, comprobantes, notificaciones, reportes, pacientes
 │   ├── app/infra/db/        # Modelos, BaseRepository/UoW, session, seed_dev.py, seed_data/, init-pgcrypto.sql
-│   ├── app/infra/           # Adaptadores db/redis/mp/smtp
+│   ├── app/infra/           # Adaptadores db/redis/mp/pago_simulado/smtp
 │   ├── app/workers/         # Worker de mails Redis (python -m app.workers.main)
 │   ├── app/tests/           # Suite pytest (test_*.py, conftest, helpers)
-│   └── alembic/             # env.py + versions/001, 002, 003, 004, 005
-├── frontend/                # SPA React 18 + TS estricto + Vite 6
-│   └── src/                 # api/client, auth/store, components/HealthBadge, pages/{reserva,agenda,bandeja,reportes}, App.tsx
-├── openspec/                # Cambios OPSX: changes/archive/, changes/c-10-frontend-reserva-publica/, specs/
-├── docs/skills-mcp/         # Fichas y evidencias del TP de Metodología I (investigacion.md, aplicacion.md)
+│   └── alembic/             # env.py + versions/001 a 006
+├── frontend/                # SPA React 18 + TS estricto + Vite 6 (Vitest + RTL)
+│   └── src/                 # api/{client,public}, auth/, components/, pages/{reserva,mail,mis-turnos,precios,agenda,bandeja,reportes}, App.tsx
+├── openspec/                # Cambios OPSX: changes/archive/, changes/, specs/
+├── docs/skills-mcp/         # Fichas, guía de equipo y evidencias del TP/TPI de Metodología I
 ├── knowledge-base/          # Fuente de verdad del dominio (11 docs: 01 visión … 11 pagos, MP real + modo simulado D14)
 ├── discovery/               # discovery.md/pdf fuente de la KB
 ├── CHANGES.md               # Índice canónico de los 13 changes, dependencias y roadmap
@@ -236,27 +245,26 @@ Secretos solo vía env vars (P5).
 
 ## 7. Estado actual y roadmap
 
-- **Cerrados (verificado en `openspec/changes/archive/` y `CHANGES.md [x]`)**:
-  C-01 `foundation-setup`, C-02 `core-models-usuarios-pacientes`, C-03
-  `auth-jwt-rbac`, C-04 `disponibilidad-slots`, C-05 `reserva-turnos-estados`,
-  C-06 `ficha-paciente-consentimiento`, C-07F `frontend-interfaz-agenda`,
-  C-07 `pagos-mp-checkout-webhook` (modo simulado D14) y C-09
-  `mails-recordatorios`.
-- **En preparación (artefactos SDD listos para implementar, sin código ni archivo)**:
-  `C-10` `frontend-reserva-publica` en `openspec/changes/c-10-frontend-reserva-publica/`.
-- **Total del roadmap**: 13 changes en 7 fases (`CHANGES.md`).
+- **Cerrados (verificado en `openspec/changes/archive/` y `CHANGES.md [x]`, 11 changes)**:
+  `C-01` `foundation-setup`, `C-02` `core-models-usuarios-pacientes`, `C-03`
+  `auth-jwt-rbac`, `C-04` `disponibilidad-slots`, `C-05` `reserva-turnos-estados`,
+  `C-06` `ficha-paciente-consentimiento`, `C-07F` `frontend-interfaz-agenda`,
+  `C-07` `pagos-mp-checkout-webhook` (modo simulado D14), `C-09`
+  `mails-recordatorios`, `C-08` `devoluciones-comprobantes-conciliacion` y
+  `C-10` `frontend-reserva-publica`.
+- **Total del roadmap**: 13 changes en 7 fases (`CHANGES.md`) + `C-07F` intermedio.
 - **Camino crítico (9)**: `C-01 → C-02 → C-03 → C-04 → C-05 → C-07 → C-08 → C-11 → C-13`.
-- **Pendientes**: C-08 `devoluciones-comprobantes-conciliacion`, C-10
-  `frontend-reserva-publica` (preparado), C-11 `frontend-agenda-backoffice`,
-  C-12 `reportes-exportaciones` y C-13 `hardening-cumplimiento-cierre`.
-- **Nota**: head actual de migraciones = `005_pago_evento_pago` (C-07); C-08 →
-  `006`. El `2026-11-05-c-07-frontend-interfaz-agenda` archivado en openspec
-  corresponde a C-07F (frontend); el C-07 de pagos quedó archivado en
-  `2026-11-13-c-07-pagos-mp-checkout-webhook`.
+- **Pendientes**: `C-11` `frontend-agenda-backoffice` (desbloqueado por `C-08`),
+  `C-12` `reportes-exportaciones` y `C-13` `hardening-cumplimiento-cierre`.
+- **Nota**: head actual de migraciones = `006_devolucion_comprobante` (`C-08`). El
+  `2026-11-05-c-07-frontend-interfaz-agenda` archivado en openspec corresponde a
+  `C-07F` (frontend); `C-07` quedó en `2026-11-13-c-07-pagos-mp-checkout-webhook`,
+  `C-08` en `2026-11-16-c-08-devoluciones-comprobantes-conciliacion` y `C-10` en
+  `2026-11-17-c-10-frontend-reserva-publica`.
 - **Pagos (D14, 2026-11-05)**: en el MVP la seña usa un proveedor simulado
-  (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; C-07 está cerrado en
-  modo simulado y C-08 mantiene alcance reescrito. Ver
-  `knowledge-base/11_pagos_mercadopago.md` §0.
+  (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; la bandeja y el flujo
+  de devoluciones/recibos (`C-08`) y reserva/checkout público (`C-10`) operan con
+  marca explícita `"(simulado)"`. Ver `knowledge-base/11_pagos_mercadopago.md` §0.
 
 Gobernanza: leer `CHANGES.md` y la KB relevante antes de cada
 `/opsx:propose`; reglas duras en `AGENTS.md` (U1–U3, P1–P15). Sin commit ni push
