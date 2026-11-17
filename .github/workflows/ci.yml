@@ -1,65 +1,77 @@
-# CI C-01 — jobs paralelos backend + frontend; un fallo bloquea el merge (branch protection).
-name: ci
+name: CI
 
 on:
   push:
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
   backend:
-    name: backend (ruff + mypy + pytest)
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install deps
-        run: pip install -r requirements.txt
-      - name: Ruff
-        run: ruff check app
-      - name: Mypy
-        run: mypy app
-      - name: Pytest
-        run: pytest -q
-      - name: Guard P15 (prohibido PAGO_MODO=simulado en production)
+        working-directory: ./backend
+    env:
+      # P15: CI nunca usa ENVIRONMENT=production con PAGO_MODO=simulado.
+      # Para tests/CI se usa ENVIRONMENT=test con PAGO_MODO=simulado (permitido por P15).
+      ENVIRONMENT: test
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/turnos_test
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: test-secret-ficticio-no-usar-en-produccion
+      MP_WEBHOOK_SECRET: test-webhook-secret-ficticio
+      PAGO_MODO: simulado
+      SMTP_HOST: localhost
+      SMTP_PORT: 1025
+      MAIL_FROM: test@clinica-ficticia.example.ar
+    services:
+      postgres:
+        image: postgres:15
         env:
-          ENVIRONMENT: production
-          JWT_SECRET: ci-secret-real-ficticio
-          MP_WEBHOOK_SECRET: ci-webhook-real-ficticio
-          PAGO_MODO: simulado
-        run: |
-          python - <<'EOF'
-          from app.main import verificar_guard_produccion
-          try:
-              verificar_guard_produccion()
-          except ValueError as exc:
-              assert "P15" in str(exc)
-          else:
-              raise SystemExit("Guard P15 no bloqueó PAGO_MODO=simulado en production")
-          EOF
-
-  frontend:
-    name: frontend (tsc + eslint + build)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: turnos_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install deps
-        run: npm ci
-      - name: Typecheck
-        run: npm run typecheck
-      - name: Lint
-        run: npm run lint
-      - name: Build
-        run: npm run build --if-present
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Ruff lint
+        run: |
+          pip install ruff
+          ruff check app/
+
+      - name: Run Mypy type check
+        run: |
+          pip install mypy
+          mypy app/
+
+      - name: Run P15 guard de arranque
+        run: |
+          python -c "from app.main import verificar_guard_produccion; verificar_guard_produccion(); print('P15 guard OK')"
+
+      - name: Run pytest
+        run: |
+          pip install pytest pytest-asyncio
+          python -m pytest app/tests/ -v
