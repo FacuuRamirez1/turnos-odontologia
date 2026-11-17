@@ -41,7 +41,7 @@
 - [x] 5.1 `domain/comprobantes/service.py` (`emitir_recibo_pago`, `emitir_recibo_devolucion`, idempotentes, `simulado` fijado al emitir, `tipo=recibo_interno`, `cae` null) enganchados en la rama `aprobado` del webhook y en la rama devolución; `test_comprobantes_emision.py`: aprobación emite un recibo (feliz), rechazo/expiración, devolución rechazada y cancelación con 0 % no emiten recibo de devolución (error), replay de webhook y reintento de ejecución no duplican; número correlativo distinto entre dos emisiones (borde)
 - [x] 5.2 `domain/comprobantes/pdf.py` (PDF 1.4 stdlib, WinAnsi) con `test_comprobantes_pdf.py`: estructura válida (`%PDF-1.4`, xref, `%%EOF`) y datos del recibo (feliz), leyenda "SIMULADO — sin valor fiscal ni movimiento de dinero" presente si `simulado = true` aunque cambie `PAGO_MODO` (borde), ausente si `simulado = false` (error)
 - [x] 5.3 `api/comprobantes.py` `GET /api/comprobantes/{id}` y `/pdf`: recepcionista descarga cualquiera (`application/pdf`), odontólogo ajeno → 403, sin JWT → 401, id inexistente → 404
-- [ ] 5.4 Checkpoint de revisión humana: PDF de muestra simulado revisado a ojo
+- [x] 5.4 Checkpoint de revisión humana: PDF de muestra simulado revisado a ojo — **APROBADO por el usuario (revisión visual del PDF de muestra `recibo_ejemplo.pdf`)**
 
 ## 6. Aviso de devolución por mail con adjunto
 

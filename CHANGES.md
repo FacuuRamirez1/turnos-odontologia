@@ -6,7 +6,7 @@
 > Corte de alcance: **P2=b (v1 completo junto)** — reserva + agenda + seña + mail se construyen juntos (D1); el recorte cae sobre reportes/UX, nunca sobre pagos/auditoría (D2).
 > **D14 (2026-11-05)**: en el MVP la seña se cobra con un **proveedor de pagos simulado** (`PAGO_MODO=simulado`) detrás del mismo puerto/adaptador; MercadoPago real queda diseñado, no construido (v2/producción). El camino crítico y las dependencias no cambian; C-07 y C-08 siguen pendientes con alcance reescrito (ver `knowledge-base/11_pagos_mercadopago.md` §0).
 > **Nombres**: el change archivado en openspec como "C-07" es **C-07F** (frontend-interfaz-agenda); el **C-07** de este índice es **pagos** (`pagos-mp-checkout-webhook`, pendiente).
-> **Migraciones**: head actual = `006_devolucion_comprobante` (C-08, en curso); C-09 → `004`, C-07 → `005`.
+> **Migraciones**: head actual = `006_devolucion_comprobante` (C-08); C-09 → `004`, C-07 → `005`.
 
 ---
 
@@ -287,7 +287,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ---
 
 ### [C-08] `devoluciones-comprobantes-conciliacion`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado
 - **Scope**: Bandeja de devoluciones **completa** + recibos internos + trazabilidad navegable (épicas D2–D4, F2); en MVP la ejecución la hace el adaptador simulado (D14)
   - Modelos: `Devolucion` (`pago_id, turno_id, monto, porcentaje 100|60, motivo, estado pendiente|aprobada|rechazada|ejecutada, aprobada_por/at, mp_refund_id` sintético `sim_refund_<uuid>` si simulado); `Comprobante` separado (D13, `tipo=recibo_interno`, flag/leyenda `simulado`, campos ARCA `cae` columnados apagados)
   - Migración **006**: tablas devolucion + comprobante
@@ -312,15 +312,15 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 
 ### [C-09] `mails-recordatorios`
 - **Estado**: `[x]` completado
-- **Scope**: Subsistema de notificaciones mail-only v1 (épica E completa en núcleo; productor de confirmación C-07 y productor de aviso de devolución C-08 pendiente de integración).
+- **Scope**: Subsistema de notificaciones mail-only v1 (épica E completa en núcleo; productor de confirmación C-07 y productor de aviso de devolución C-08 ya integrados).
   - Modelo `RecordatorioMail` (`turno_id, tipo, destinatario, plantilla_version, estado encolado|enviado|reintentando|fallido|confirmado_desde_mail|cancelado_desde_mail, intentos, token_accion` hash único con expiración) + **migración 004** (`004_recordatorio_mail`, C-09; C-07 → 005 y C-08 → 006).
   - Workers Redis separados del request path: colas, reintentos backoff 3 intentos, scheduler de ventana configurable `RECORDATORIO_VENTANA_HS`.
-  - Mails: confirmación al reservar/al confirmar (A3, enganchada en `transition()` `creado→confirmado` actor `sistema` para C-07), recordatorio en ventana (E1), aviso de devolución con cotización seña (F2 sin ejecución de devolución hasta C-08; con marca "(simulado)" cuando `PAGO_MODO=simulado`, D14); plantillas versionadas.
+  - Mails: confirmación al reservar/al confirmar (A3, enganchada en `transition()` `creado→confirmado` actor `sistema` para C-07), recordatorio en ventana (E1), aviso de devolución con cotización seña (F2; productor `aviso_devolucion` integrado desde C-08, con marca "(simulado)" cuando `PAGO_MODO=simulado`, D14); plantillas versionadas.
   - `GET /api/mail/confirmar?token=` / `/api/mail/cancelar?token=` — tokens firmados un solo uso, vida corta, hash en DB y consumo en DB; cancelar deriva a F2 mostrando regla de seña (E2).
   - Config entregabilidad: `MAIL_FROM` alineado, docs SPF/DKIM/DMARC del dominio, métricas de entrega visibles (E3); fallo sin reintento infinito.
   - Puerto/adaptador de notificaciones: WhatsApp **[v2]** conector apagado; `mail:pendientes` lista para C-07/C-08.
   - Tests: migración 004, modelo, tokens, plantillas, SMTP fake, outbox, worker (éxito/fallo/tercer fallo/replay), scheduler, endpoints, rate-limit, métricas.
-- **Dependencias**: C-05, C-07 (C-07 no existe aún: el hook de confirmación queda listo y testeado; C-08 no existe: aviso de devolución es servicio de dominio sin productor real).
+- **Dependencias**: C-05, C-07 (hook de confirmación listo y testeado), C-08 (productor `aviso_devolucion` ya integrado).
 - **Governance**: ALTO
 - **Leer antes**:
   - `knowledge-base/07_flujos_principales.md` F4 (recordatorio por mail)
