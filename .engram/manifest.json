@@ -72,6 +72,14 @@
       "sessions": 1,
       "memories": 3,
       "prompts": 0
+    },
+    {
+      "id": "e1d17c45",
+      "created_by": "mnvva",
+      "created_at": "2026-11-17T12:26:02.4922697Z",
+      "sessions": 1,
+      "memories": 1,
+      "prompts": 0
     }
   ]
 }
