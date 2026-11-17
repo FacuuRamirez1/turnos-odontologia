@@ -1,16 +1,14 @@
-"""Tests C-13 task 8 — Hardening: restore backup, retención, flags v2 off, checklist criterios de éxito v1.
+"""Tests C-13 task 8 — Hardening: restore, retención, flags v2 off, criterios de éxito v1.
 
-Escenarios por test: feliz (funcionamiento esperado), negocio (error de dominio), borde (caso límite).
+Escenarios: feliz, error de negocio, caso límite.
 """
 
-import os
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.settings import get_settings
@@ -26,9 +24,7 @@ from app.infra.db.models import (
     Usuario,
 )
 from app.infra.db.seed_dev import seed
-from app.main import app
 from app.workers.main import ejecutar_retencion
-
 
 # ---------------------------------------------------------------------------
 # 8.1 Test de restore backup (simulado: verifica integridad de datos tras "restaurar")
@@ -290,7 +286,7 @@ def test_criterio_2_no_doble_reserva_concurrencia(db_session: Session) -> None:
         idempotency_key="idem-doble-2", version=1, is_active=True,
     )
     db_session.add(turno2)
-    with pytest.raises(Exception):
+    with pytest.raises(IntegrityError):
         db_session.commit()
 
 
@@ -337,7 +333,7 @@ def test_criterio_4_confirmar_cancelar_desde_mail(db_session: Session) -> None:
 
 
 def test_criterio_5_recorte_sostenido_sin_v2_en_v1() -> None:
-    """Borde: build v1 no tiene WhatsApp, ARCA, sobre-turnos, lista_espera con escrituras ni MP real."""
+    """Borde: v1 sin WhatsApp, ARCA, sobre-turnos, lista_espera con escrituras ni MP real."""
     s = get_settings()
     assert s.whatsapp_enabled is False
     assert s.arca_enabled is False
