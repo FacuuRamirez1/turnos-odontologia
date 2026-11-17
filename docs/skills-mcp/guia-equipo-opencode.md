@@ -22,13 +22,13 @@
 
 > Las restricciones del TP anterior (no implementar ni archivar `C-10`, no tocar `backend/` ni `frontend/`) **ya no rigen**. Pasamos a implementar.
 >
-> **Mínimo del TPI**: 2 changes válidos por integrante (total = 2 × integrantes). Hoy hay **10 changes archivados**; para el mínimo solo cuentan los que estén completos, probados y verificados. Si el equipo tiene 4 integrantes, el mínimo sube a 8.
+> **Mínimo del TPI**: somos **4 integrantes**, así que el mínimo es **8 changes válidos** (2 × 4). Hoy hay **10 changes archivados**; para el mínimo solo cuentan los que estén completos, probados y verificados.
 
 ---
 
 ## 2. Qué exige el TPI (resumen operativo)
 
-1. **Mínimo grupal**: 2 changes válidos por integrante (3 integrantes = 6). Cuentan los del Parcial 2. Nosotros ya superamos ese mínimo, pero **solo si cada change archivado tiene su alcance completo, tests ejecutados y funcionamiento real**. Archivar no reemplaza probar.
+1. **Mínimo grupal**: 2 changes válidos por integrante (**4 integrantes = 8**). Cuentan los del Parcial 2. Nosotros ya superamos ese mínimo, pero **solo si cada change archivado tiene su alcance completo, tests ejecutados y funcionamiento real**. Archivar no reemplaza probar.
 2. **Un change cuenta** cuando está: propuesto → aplicado → **verificado** (tests ejecutados antes de archivar + comprobación real) → archivado (OpenSpec y `CHANGES.md` actualizado). `C-08` es el modelo más reciente: 35 subtareas, 17 archivos de test nuevos y un E2E completo antes de archivar.
 3. **Los pendientes se distinguen claramente** de los terminados: no se presentan como funcionalidades completas, ni en el README ni en el video.
 4. **Skill propia y MCP son obligatorios** y deben tener **evidencia concreta de aplicación a un change**: solicitud, herramienta o procedimiento, resultado y aporte. Tenerlos instalados o listarlos no alcanza. Un change preparado con ellos solo cuenta para el mínimo si además está implementado, verificado y archivado.
