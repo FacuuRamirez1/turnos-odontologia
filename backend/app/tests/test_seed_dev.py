@@ -58,7 +58,7 @@ def test_seed_idempotente_doble_corrida(db_session: Session) -> None:
         db_session.query(TurnoHistorial).count(),
         db_session.query(RecordatorioMail).count(),
     )
-    assert primera == (4, 2, 5, 2, 2, 1, 2, 7, 6, 1)
+    assert primera == (4, 2, 5, 10, 2, 1, 2, 7, 20, 1)
 
     seed(db_session)
     assert (

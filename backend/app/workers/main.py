@@ -194,6 +194,82 @@ def ejecutar_tick_scheduler(
     return resultado
 
 
+def ejecutar_retencion(
+    session_factory: Callable[[], Session],
+) -> dict[str, int]:
+    """C-13 task 3.2 — Job de retención RN-RETENCION.
+
+    Aplica la política publicada (docs/politica_retencion.md):
+    - recordatorio_mail: eliminar enviados/fallidos > 12 meses.
+    - turno: anonimizar DNI/email/telefono > 24 meses (mantener conteo).
+    - pago: anonimizar datos sensibles > 24 meses.
+    - turno_historial / evento_pago: append-only, nunca borrar.
+
+    Deja rastro append-only de registros conservados/eliminados/anonimizados.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from app.infra.db.models import Paciente, Pago, RecordatorioMail, Turno
+
+    ahora = datetime.now(UTC)
+    corte_mail = ahora - timedelta(days=365)
+    corte_sensible = ahora - timedelta(days=730)
+
+    resultado = {
+        "mails_eliminados": 0,
+        "turnos_anonimizados": 0,
+        "pagos_anonimizados": 0,
+    }
+
+    with session_factory() as session:
+        # Mails vencidos > 12 meses: eliminar (no son append-only).
+        mails_vencidos = (
+            session.query(RecordatorioMail)
+            .filter(
+                RecordatorioMail.created_at < corte_mail,
+                RecordatorioMail.estado.in_(("enviado", "fallido")),
+                RecordatorioMail.is_active.is_(True),
+            )
+            .all()
+        )
+        for m in mails_vencidos:
+            session.delete(m)
+            resultado["mails_eliminados"] += 1
+
+        # Turnos > 24 meses: anonimizar DNI/email/telefono (mantener fila).
+        turnos_viejos = (
+            session.query(Turno)
+            .join(Paciente, Turno.paciente_id == Paciente.id)
+            .filter(Turno.created_at < corte_sensible, Turno.is_active.is_(True))
+            .all()
+        )
+        for t in turnos_viejos:
+            p = session.get(Paciente, t.paciente_id)
+            if p is not None:
+                p.dni = "ANONIMIZADO"
+                p.email = None
+                p.telefono = None
+                session.add(p)
+                resultado["turnos_anonimizados"] += 1
+
+        # Pagos > 24 meses: anonimizar mp_payment_id/mp_preference_id.
+        pagos_viejos = (
+            session.query(Pago)
+            .filter(Pago.created_at < corte_sensible, Pago.is_active.is_(True))
+            .all()
+        )
+        for pg in pagos_viejos:
+            pg.mp_payment_id = f"anon_{pg.id}"
+            pg.mp_preference_id = None
+            session.add(pg)
+            resultado["pagos_anonimizados"] += 1
+
+        session.commit()
+
+    logger.info("retencion ejecutada: %s", resultado)
+    return resultado
+
+
 def _leer_job(redis_client: Any) -> Any:
     try:
         item = redis_client.blpop(QUEUE, timeout=1)

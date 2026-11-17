@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     mail_rate_limit: int = Field(default=30, alias="MAIL_RATE_LIMIT")
     api_public_url: str = Field(default="http://localhost:8000", alias="API_PUBLIC_URL")
     worker_scheduler_tick_s: int = Field(default=60, alias="WORKER_SCHEDULER_TICK_S")
+    # --- C-13: cifrado de sensibles en reposo (pgcrypto) ---
+    enc_key: str = Field(default="", alias="ENC_KEY")
 
     @model_validator(mode="after")
     def _rechazar_secreto_debil_en_produccion(self) -> Self:

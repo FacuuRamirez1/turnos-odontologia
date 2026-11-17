@@ -46,6 +46,7 @@ router = APIRouter(tags=["pagos"])
 STAFF_PAGOS = require_role("odontologo", "recepcionista", "admin")
 
 _sandbox_limiter: LoginRateLimiter | None = None
+_webhook_limiter: LoginRateLimiter | None = None
 
 
 def get_sandbox_limiter() -> LoginRateLimiter:
@@ -62,6 +63,31 @@ def reset_sandbox_limiter(
 ) -> None:
     global _sandbox_limiter
     _sandbox_limiter = LoginRateLimiter(
+        client=None, limit=limit, window_seconds=window_seconds
+    )
+
+
+WEBHOOK_PREFIX = "webhook:ratelimit:"
+WEBHOOK_LIMIT = 30
+WEBHOOK_WINDOW = 60
+
+
+def get_webhook_limiter() -> LoginRateLimiter:
+    global _webhook_limiter
+    if _webhook_limiter is None:
+        _webhook_limiter = build_rate_limiter(
+            get_settings().redis_url,
+            limit=WEBHOOK_LIMIT,
+            window_seconds=WEBHOOK_WINDOW,
+        )
+    return _webhook_limiter
+
+
+def reset_webhook_limiter(
+    limit: int = WEBHOOK_LIMIT, window_seconds: int = WEBHOOK_WINDOW,
+) -> None:
+    global _webhook_limiter
+    _webhook_limiter = LoginRateLimiter(
         client=None, limit=limit, window_seconds=window_seconds
     )
 
@@ -563,6 +589,13 @@ async def webhook_mercadopago(
     body = await request.body()
     payload_str = body.decode("utf-8")
     firma = request.headers.get("x-signature", "")
+
+    ip = request.client.host if request.client is not None else "desconocida"
+    if not get_webhook_limiter().check_and_count(f"{WEBHOOK_PREFIX}{ip}"):
+        return JSONResponse(
+            status_code=429,
+            content={"code": "RATE_LIMIT", "detail": "demasiadas solicitudes webhook"},
+        )
 
     resultado = procesar_webhook(db, payload_str, firma, actor="sistema")
     db.commit()

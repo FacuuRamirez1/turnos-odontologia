@@ -19,8 +19,34 @@ from app.core.settings import get_settings
 from app.domain.pacientes.service import normalizar_dni, validar_formato_dni
 from app.infra.db.models import Paciente, Turno
 from app.infra.db.session import get_db
+from app.infra.redis.rate_limit import LoginRateLimiter, build_rate_limiter
 
 router = APIRouter(tags=["mis-turnos"])
+
+MIS_TURNOS_PREFIX = "mis_turnos:ratelimit:"
+MIS_TURNOS_LIMIT = 30
+MIS_TURNOS_WINDOW = 60
+_mis_turnos_limiter: LoginRateLimiter | None = None
+
+
+def get_mis_turnos_limiter() -> LoginRateLimiter:
+    global _mis_turnos_limiter
+    if _mis_turnos_limiter is None:
+        _mis_turnos_limiter = build_rate_limiter(
+            get_settings().redis_url,
+            limit=MIS_TURNOS_LIMIT,
+            window_seconds=MIS_TURNOS_WINDOW,
+        )
+    return _mis_turnos_limiter
+
+
+def reset_mis_turnos_limiter(
+    limit: int = MIS_TURNOS_LIMIT, window_seconds: int = MIS_TURNOS_WINDOW,
+) -> None:
+    global _mis_turnos_limiter
+    _mis_turnos_limiter = LoginRateLimiter(
+        client=None, limit=limit, window_seconds=window_seconds
+    )
 
 
 class MisTurnoOut(BaseModel):
@@ -43,6 +69,11 @@ def mis_turnos(
     db: Session = Depends(get_db),
 ) -> list[MisTurnoOut]:
     """Turnos del paciente del token (nunca DNI solo, P12)."""
+    ip = request.client.host if request.client is not None else "desconocida"
+    if not get_mis_turnos_limiter().check_and_count(f"{MIS_TURNOS_PREFIX}{ip}"):
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS, "demasiadas consultas mis-turnos"
+        )
     _ = request
     if not token:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "se requiere token")

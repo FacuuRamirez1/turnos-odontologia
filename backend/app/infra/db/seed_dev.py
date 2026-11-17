@@ -177,6 +177,14 @@ SEED_INICIO_APROBADO = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
 SEED_INICIO_DEVUELTO = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
 ID_TURNO_PAGO_APROBADO = uuid.UUID("55555555-5555-4555-8555-555555555551")
 ID_TURNO_DEVUELTO = uuid.UUID("55555555-5555-4555-8555-555555555552")
+ID_TURNO_CREADO = uuid.UUID("55555555-5555-4555-8555-555555555553")
+ID_TURNO_ATENDIDO = uuid.UUID("55555555-5555-4555-8555-555555555554")
+ID_TURNO_CANCELADO = uuid.UUID("55555555-5555-4555-8555-555555555555")
+ID_TURNO_REPROGRAMADO = uuid.UUID("55555555-5555-4555-8555-555555555556")
+ID_TURNO_NO_SHOW = uuid.UUID("55555555-5555-4555-8555-555555555557")
+ID_TURNO_CREADO_2 = uuid.UUID("55555555-5555-4555-8555-555555555558")
+ID_TURNO_CONFIRMADO_2 = uuid.UUID("55555555-5555-4555-8555-555555555559")
+ID_TURNO_ATENDIDO_2 = uuid.UUID("55555555-5555-4555-8555-55555555555A")
 ID_PAGO_APROBADO = uuid.UUID("66666666-6666-4666-8666-666666666661")
 ID_PAGO_DEVUELTO = uuid.UUID("66666666-6666-4666-8666-666666666662")
 ID_DEVOLUCION_EJECUTADA = uuid.UUID("77777777-7777-4777-8777-777777777771")
@@ -196,6 +204,21 @@ ID_HIST_DEVUELTO_CONFIRMADO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4")
 ID_HIST_DEVUELTO_CANCELADO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa5")
 ID_HIST_DEVUELTO_DEVUELTO = uuid.UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa6")
 ID_RECORDATORIO_AVISO_DEVOLUCION = uuid.UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1")
+
+ID_HIST_CREADO_CREADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc01")
+ID_HIST_ATENDIDO_CREADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc02")
+ID_HIST_ATENDIDO_ATENDIDO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc03")
+ID_HIST_CANCELADO_CREADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc04")
+ID_HIST_CANCELADO_CANCELADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc05")
+ID_HIST_REPROGRAMADO_CREADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc06")
+ID_HIST_REPROGRAMADO_REPROGRAMADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc07")
+ID_HIST_NO_SHOW_CREADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc08")
+ID_HIST_NO_SHOW_NO_SHOW = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc09")
+ID_HIST_CREADO_2_CREADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc10")
+ID_HIST_CONFIRMADO_2_CREADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc11")
+ID_HIST_CONFIRMADO_2_CONFIRMADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc12")
+ID_HIST_ATENDIDO_2_CREADO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc13")
+ID_HIST_ATENDIDO_2_ATENDIDO = uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc14")
 
 TURNOS: list[dict[str, Any]] = [
     {
@@ -223,6 +246,118 @@ TURNOS: list[dict[str, Any]] = [
         "idempotency_key": "seed-c08-turno-devuelto",
         "version": 4,
         "pago_id": ID_PAGO_DEVUELTO,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_CREADO,
+        "paciente_id": PACIENTES[2]["id"],
+        "odontologo_id": ID_ODONTO_2,
+        "inicio": datetime(2026, 11, 5, 9, 0, tzinfo=UTC),
+        "fin": datetime(2026, 11, 5, 9, 30, tzinfo=UTC),
+        "estado": "creado",
+        "canal": "web",
+        "idempotency_key": "seed-c13-turno-creado",
+        "version": 1,
+        "pago_id": None,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_ATENDIDO,
+        "paciente_id": PACIENTES[3]["id"],
+        "odontologo_id": ID_ODONTO_1,
+        "inicio": datetime(2026, 11, 6, 10, 0, tzinfo=UTC),
+        "fin": datetime(2026, 11, 6, 10, 30, tzinfo=UTC),
+        "estado": "atendido",
+        "canal": "recepcion",
+        "idempotency_key": "seed-c13-turno-atendido",
+        "version": 2,
+        "pago_id": None,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_CANCELADO,
+        "paciente_id": PACIENTES[4]["id"],
+        "odontologo_id": ID_ODONTO_2,
+        "inicio": datetime(2026, 11, 7, 11, 0, tzinfo=UTC),
+        "fin": datetime(2026, 11, 7, 11, 30, tzinfo=UTC),
+        "estado": "cancelado",
+        "canal": "web",
+        "idempotency_key": "seed-c13-turno-cancelado",
+        "version": 2,
+        "pago_id": None,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_REPROGRAMADO,
+        "paciente_id": PACIENTES[0]["id"],
+        "odontologo_id": ID_ODONTO_1,
+        "inicio": datetime(2026, 11, 8, 12, 0, tzinfo=UTC),
+        "fin": datetime(2026, 11, 8, 12, 30, tzinfo=UTC),
+        "estado": "reprogramado",
+        "canal": "web",
+        "idempotency_key": "seed-c13-turno-reprogramado",
+        "version": 2,
+        "pago_id": None,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_NO_SHOW,
+        "paciente_id": PACIENTES[1]["id"],
+        "odontologo_id": ID_ODONTO_2,
+        "inicio": datetime(2026, 11, 9, 13, 0, tzinfo=UTC),
+        "fin": datetime(2026, 11, 9, 13, 30, tzinfo=UTC),
+        "estado": "no_show",
+        "canal": "recepcion",
+        "idempotency_key": "seed-c13-turno-no-show",
+        "version": 2,
+        "pago_id": None,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_CREADO_2,
+        "paciente_id": PACIENTES[2]["id"],
+        "odontologo_id": ID_ODONTO_1,
+        "inicio": datetime(2026, 11, 10, 14, 0, tzinfo=UTC),
+        "fin": datetime(2026, 11, 10, 14, 30, tzinfo=UTC),
+        "estado": "creado",
+        "canal": "web",
+        "idempotency_key": "seed-c13-turno-creado-2",
+        "version": 1,
+        "pago_id": None,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_CONFIRMADO_2,
+        "paciente_id": PACIENTES[3]["id"],
+        "odontologo_id": ID_ODONTO_2,
+        "inicio": datetime(2026, 11, 11, 15, 0, tzinfo=UTC),
+        "fin": datetime(2026, 11, 11, 15, 30, tzinfo=UTC),
+        "estado": "confirmado",
+        "canal": "web",
+        "idempotency_key": "seed-c13-turno-confirmado-2",
+        "version": 2,
+        "pago_id": None,
+        "reprogramado_de_id": None,
+        "is_active": True,
+    },
+    {
+        "id": ID_TURNO_ATENDIDO_2,
+        "paciente_id": PACIENTES[4]["id"],
+        "odontologo_id": ID_ODONTO_1,
+        "inicio": datetime(2026, 11, 12, 16, 0, tzinfo=UTC),
+        "fin": datetime(2026, 11, 12, 16, 30, tzinfo=UTC),
+        "estado": "atendido",
+        "canal": "recepcion",
+        "idempotency_key": "seed-c13-turno-atendido-2",
+        "version": 2,
+        "pago_id": None,
         "reprogramado_de_id": None,
         "is_active": True,
     },
@@ -452,6 +587,146 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "actor_id": "sistema",
         "fecha": datetime(2026, 11, 4, 10, 5, tzinfo=UTC),
         "motivo": "devolucion sim_refund_seed_c08_60 ejecutada (seed C-08)",
+    },
+    {
+        "id": ID_HIST_CREADO_CREADO,
+        "turno_id": ID_TURNO_CREADO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": str(PACIENTES[2]["id"]),
+        "fecha": datetime(2026, 11, 5, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-13",
+    },
+    {
+        "id": ID_HIST_ATENDIDO_CREADO,
+        "turno_id": ID_TURNO_ATENDIDO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": str(PACIENTES[3]["id"]),
+        "fecha": datetime(2026, 11, 6, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-13",
+    },
+    {
+        "id": ID_HIST_ATENDIDO_ATENDIDO,
+        "turno_id": ID_TURNO_ATENDIDO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "atendido",
+        "actor_tipo": "odontologo",
+        "actor_id": str(ID_ODONTO_1),
+        "fecha": datetime(2026, 11, 6, 10, 30, tzinfo=UTC),
+        "motivo": "atendido en consulta (seed C-13)",
+    },
+    {
+        "id": ID_HIST_CANCELADO_CREADO,
+        "turno_id": ID_TURNO_CANCELADO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": str(PACIENTES[4]["id"]),
+        "fecha": datetime(2026, 11, 7, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-13",
+    },
+    {
+        "id": ID_HIST_CANCELADO_CANCELADO,
+        "turno_id": ID_TURNO_CANCELADO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "cancelado",
+        "actor_tipo": "recepcionista",
+        "actor_id": str(ID_RECEP),
+        "fecha": datetime(2026, 11, 7, 10, 0, tzinfo=UTC),
+        "motivo": "cancelacion por paciente (seed C-13)",
+    },
+    {
+        "id": ID_HIST_REPROGRAMADO_CREADO,
+        "turno_id": ID_TURNO_REPROGRAMADO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": str(PACIENTES[0]["id"]),
+        "fecha": datetime(2026, 11, 8, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-13",
+    },
+    {
+        "id": ID_HIST_REPROGRAMADO_REPROGRAMADO,
+        "turno_id": ID_TURNO_REPROGRAMADO,
+        "estado_anterior": "creado",
+        "estado_nuevo": "reprogramado",
+        "actor_tipo": "recepcionista",
+        "actor_id": str(ID_RECEP),
+        "fecha": datetime(2026, 11, 8, 11, 0, tzinfo=UTC),
+        "motivo": "reprogramacion a las 12:00 (seed C-13)",
+    },
+    {
+        "id": ID_HIST_NO_SHOW_CREADO,
+        "turno_id": ID_TURNO_NO_SHOW,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": str(PACIENTES[1]["id"]),
+        "fecha": datetime(2026, 11, 9, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-13",
+    },
+    {
+        "id": ID_HIST_NO_SHOW_NO_SHOW,
+        "turno_id": ID_TURNO_NO_SHOW,
+        "estado_anterior": "creado",
+        "estado_nuevo": "no_show",
+        "actor_tipo": "sistema",
+        "actor_id": "sistema",
+        "fecha": datetime(2026, 11, 9, 13, 30, tzinfo=UTC),
+        "motivo": "no show (seed C-13)",
+    },
+    {
+        "id": ID_HIST_CREADO_2_CREADO,
+        "turno_id": ID_TURNO_CREADO_2,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": str(PACIENTES[2]["id"]),
+        "fecha": datetime(2026, 11, 10, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-13",
+    },
+    {
+        "id": ID_HIST_CONFIRMADO_2_CREADO,
+        "turno_id": ID_TURNO_CONFIRMADO_2,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": str(PACIENTES[3]["id"]),
+        "fecha": datetime(2026, 11, 11, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-13",
+    },
+    {
+        "id": ID_HIST_CONFIRMADO_2_CONFIRMADO,
+        "turno_id": ID_TURNO_CONFIRMADO_2,
+        "estado_anterior": "creado",
+        "estado_nuevo": "confirmado",
+        "actor_tipo": "sistema",
+        "actor_id": "sistema",
+        "fecha": datetime(2026, 11, 11, 9, 1, tzinfo=UTC),
+        "motivo": "pago aprobado via webhook (seed C-13)",
+    },
+    {
+        "id": ID_HIST_ATENDIDO_2_CREADO,
+        "turno_id": ID_TURNO_ATENDIDO_2,
+        "estado_anterior": "creado",
+        "estado_nuevo": "creado",
+        "actor_tipo": "paciente",
+        "actor_id": str(PACIENTES[4]["id"]),
+        "fecha": datetime(2026, 11, 12, 9, 0, tzinfo=UTC),
+        "motivo": "reserva seed C-13",
+    },
+    {
+        "id": ID_HIST_ATENDIDO_2_ATENDIDO,
+        "turno_id": ID_TURNO_ATENDIDO_2,
+        "estado_anterior": "creado",
+        "estado_nuevo": "atendido",
+        "actor_tipo": "odontologo",
+        "actor_id": str(ID_ODONTO_1),
+        "fecha": datetime(2026, 11, 12, 16, 30, tzinfo=UTC),
+        "motivo": "atendido en consulta (seed C-13)",
     },
 ]
 

@@ -26,13 +26,13 @@ def _script() -> ScriptDirectory:
     return ScriptDirectory.from_config(cfg)
 
 
-def test_head_unico_es_006_y_encadena_005() -> None:
-    """Feliz: `alembic current` tras upgrade = 006 (único head) sobre 005."""
+def test_head_unico_es_007_y_encadena_006() -> None:
+    """Feliz: `alembic current` tras upgrade = 007 (único head) sobre 006."""
     script = _script()
-    assert script.get_heads() == ["006_devolucion_comprobante"]
-    rev = script.get_revision("006_devolucion_comprobante")
+    assert script.get_heads() == ["007_paciente_campos_cifrados"]
+    rev = script.get_revision("007_paciente_campos_cifrados")
     assert rev is not None
-    assert rev.down_revision == "005_pago_evento_pago"
+    assert rev.down_revision == "006_devolucion_comprobante"
 
 
 def test_downgrade_restaura_check_original_de_evento_pago() -> None:

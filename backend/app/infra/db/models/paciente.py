@@ -8,7 +8,14 @@
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, Index, String, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    Index,
+    LargeBinary,
+    String,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infra.db.base import Base
@@ -23,6 +30,15 @@ class Paciente(AuditMixin, Base):
     apellido: Mapped[str] = mapped_column(String(120), nullable=False)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
     telefono: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    dni_cifrado: Mapped[bytes | None] = mapped_column(
+        LargeBinary(), nullable=True, default=None
+    )
+    email_cifrado: Mapped[bytes | None] = mapped_column(
+        LargeBinary(), nullable=True, default=None
+    )
+    telefono_cifrado: Mapped[bytes | None] = mapped_column(
+        LargeBinary(), nullable=True, default=None
+    )
     consentimiento_datos: Mapped[bool] = mapped_column(nullable=False)
     consentimiento_fecha: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None
