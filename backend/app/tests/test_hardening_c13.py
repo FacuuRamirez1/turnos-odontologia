@@ -175,6 +175,7 @@ def test_retencion_anonimiza_turnos_viejos(db_session: Session) -> None:
 
     assert resultado["turnos_anonimizados"] == 1
     p = db_session.get(Paciente, paciente.id)
+    assert p is not None
     assert p.dni == "ANONIMIZADO"
     assert p.email is None
     assert p.telefono is None
@@ -320,6 +321,7 @@ def test_criterio_4_confirmar_cancelar_desde_mail(db_session: Session) -> None:
 
     id_turno_devuelto = UUID("55555555-5555-4555-8555-555555555552")
     turno_devuelto = db_session.get(Turno, id_turno_devuelto)
+    assert turno_devuelto is not None
     assert str(turno_devuelto.estado) == "devuelto"
 
     historial = (
