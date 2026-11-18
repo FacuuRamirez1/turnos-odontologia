@@ -394,7 +394,7 @@ Paso │ Agente A (Backend Core)      │ Agente B (Backend Aux)       │ Agent
 ---
 
 ### [C-13] `hardening-cumplimiento-cierre`
-- **Estado**: `[ ]` pendiente
+- **Estado**: `[x]` completado (archivado 2026-11-17)
 - **Scope**: Endurecimiento v1 + cumplimiento mínimo explícito + verificación de recorte (criterios de éxito `01 §5`)
   - TLS en tránsito + cifrado declarado de sensibles en reposo; backups periódicos PostgreSQL con prueba de restore; job de retención RN-RETENCION con política publicada
   - Rate-limit auditado en todas las rutas públicas `03 §3`; verificación de flags v2 apagados (`WHATSAPP_ENABLED=false`, `ARCA_ENABLED=false`, `PAGO_MODO=mercadopago` no construido/apagado en el MVP, endpoint sandbox `/pagos/{pago_id}/simular` inexistente fuera de `PAGO_MODO=simulado` y modo simulado nunca habilitado en producción (P15), `lista_espera` sin escrituras, sin sobre-turnos RN-SOBRETURNO)

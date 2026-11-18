@@ -9,3 +9,7 @@ __pycache__/
 node_modules/
 dist/
 pgdata/
+
+# PDFs de consigna/descargas locales (documentacion del TPI, no es fuente del sistema)
+documento-tpi*.pdf
+
