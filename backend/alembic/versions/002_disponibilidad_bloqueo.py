@@ -67,7 +67,7 @@ def upgrade() -> None:
             "vigente_desde IS NULL OR vigente_hasta IS NULL OR vigente_desde <= vigente_hasta",
             name="ck_disponibilidad_vigencia_orden",
         ),
-        sa.ExcludeConstraint(
+        postgresql.ExcludeConstraint(
             ("odontologo_id", "="),
             ("dia_semana", "="),
             (

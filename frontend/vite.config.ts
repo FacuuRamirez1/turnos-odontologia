@@ -7,7 +7,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        // En Docker `localhost` es el propio contenedor web: el proxy debe apuntar
+        // al servicio `api`. Fuera de Docker: VITE_PROXY_TARGET=http://localhost:8000.
+        target: process.env.VITE_PROXY_TARGET ?? "http://api:8000",
         changeOrigin: true,
       },
     },

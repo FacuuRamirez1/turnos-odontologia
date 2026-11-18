@@ -175,16 +175,34 @@ def procesar_job(session: Session, mailer: SmtpMailer, recordatorio_id: str) -> 
     return "enviado"
 
 
+def _empujar_jobs(redis_client: Any, filas: list[RecordatorioMail]) -> None:
+    """RPUSH del job `{"recordatorio_id": ...}` que consume `_leer_job` (BLPOP)."""
+    for fila in filas:
+        redis_client.rpush(QUEUE, json.dumps({"recordatorio_id": str(fila.id)}))
+
+
 def ejecutar_tick_scheduler(
-    session_factory: Callable[[], Session], ventana_hs: int,
+    session_factory: Callable[[], Session], ventana_hs: int, redis_client: Any,
 ) -> dict[str, int]:
+    """Publica el outbox a Redis y encola recordatorios de la ventana.
+
+    El job se empuja ANTES del commit: si Redis falla, la excepción sale del
+    `with` sin commit, `publicado_at` no queda marcado y el próximo tick
+    reintenta (entrega al-menos-una-vez; `procesar_job` descarta duplicados
+    porque solo envía filas `encolado`/`reintentando`).
+    """
     resultado = {"publicados": 0, "republicados": 0, "recordatorios_encolados": 0}
     with session_factory() as session:
         publicados = publicar_pendientes(session)
+        _empujar_jobs(redis_client, publicados)
         session.commit()
         resultado["publicados"] = len(publicados)
     with session_factory() as session:
         republicados = republicar_reintentando(session)
+        _empujar_jobs(redis_client, republicados)
+        ahora = _ahora_utc()
+        for fila in republicados:
+            fila.publicado_at = ahora  # evita re-empujar hasta el próximo fallo
         session.commit()
         resultado["republicados"] = len(republicados)
     with session_factory() as session:
@@ -305,7 +323,7 @@ def run_once(
 
     if ahora_monotonic >= scheduler_due:
         try:
-            res = ejecutar_tick_scheduler(session_factory, ventana_hs)
+            res = ejecutar_tick_scheduler(session_factory, ventana_hs, redis_client)
             logger.info("tick scheduler: %s", res)
         except Exception as exc:
             logger.exception("falló tick scheduler: %s", exc)

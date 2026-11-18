@@ -9,7 +9,7 @@ Feriado + bloqueo de ejemplo: fixture JSON en `seed_data/` (tabla `bloqueo`
 """
 
 import uuid
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -38,6 +38,21 @@ DEMO_HASH = hash_password(DEV_PASSWORD)
 assert len(DEMO_HASH) == 60
 
 DOMINIO = "clinica-ficticia.example.ar"
+
+# Fechas del seed relativas a "hoy": `turno` tiene CHECK (inicio > now())
+# (ck_turno_inicio_futuro, RN-PASADO), así que las fechas fijas de noviembre
+# 2026 dejan de insertarse una vez vencidas. Se desplazan en múltiplos de 7
+# días (conserva día de semana y distancias relativas); antes del 3/11/2026
+# el desplazamiento es 0 y el seed queda idéntico al original.
+_SEED_ANCLA = date(2026, 11, 3)  # primer turno del seed
+_SHIFT_DIAS = max(0, -(-((datetime.now(UTC).date() - _SEED_ANCLA).days + 1) // 7) * 7)
+
+
+def _nov(dia: int, hora: int, minuto: int = 0) -> datetime:
+    """Datetime UTC del seed (día de noviembre 2026) desplazado a futuro."""
+    return datetime(2026, 11, dia, hora, minuto, tzinfo=UTC) + timedelta(days=_SHIFT_DIAS)
+
+
 CONSENT_AT = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
 ID_ODONTO_1 = uuid.UUID("11111111-1111-4111-8111-111111111111")
@@ -163,8 +178,8 @@ BLOQUEOS: list[dict[str, Any]] = [
     {
         "id": uuid.uuid5(uuid.NAMESPACE_OID, "bloqueo-ejemplo-odonto1"),
         "odontologo_id": ID_ODONTO_1,
-        "desde": datetime(2026, 11, 2, 13, 0),
-        "hasta": datetime(2026, 11, 2, 14, 0),
+        "desde": _nov(2, 13, 0).replace(tzinfo=None),
+        "hasta": _nov(2, 14, 0).replace(tzinfo=None),
         "motivo": "bloqueo",
         "created_by": None,
         "is_active": True,
@@ -173,8 +188,8 @@ BLOQUEOS: list[dict[str, Any]] = [
 
 # C-08: 1 pago aprobado con recibo + 1 devolucion 60% ejecutada con recibo.
 # Proveedor simulado, ids/mp_* deterministicos, DNI ficticios (P11), idempotente.
-SEED_INICIO_APROBADO = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
-SEED_INICIO_DEVUELTO = datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+SEED_INICIO_APROBADO = _nov(3, 12, 0)
+SEED_INICIO_DEVUELTO = _nov(4, 12, 0)
 ID_TURNO_PAGO_APROBADO = uuid.UUID("55555555-5555-4555-8555-555555555551")
 ID_TURNO_DEVUELTO = uuid.UUID("55555555-5555-4555-8555-555555555552")
 ID_TURNO_CREADO = uuid.UUID("55555555-5555-4555-8555-555555555553")
@@ -253,8 +268,8 @@ TURNOS: list[dict[str, Any]] = [
         "id": ID_TURNO_CREADO,
         "paciente_id": PACIENTES[2]["id"],
         "odontologo_id": ID_ODONTO_2,
-        "inicio": datetime(2026, 11, 5, 9, 0, tzinfo=UTC),
-        "fin": datetime(2026, 11, 5, 9, 30, tzinfo=UTC),
+        "inicio": _nov(5, 9, 0),
+        "fin": _nov(5, 9, 30),
         "estado": "creado",
         "canal": "web",
         "idempotency_key": "seed-c13-turno-creado",
@@ -267,8 +282,8 @@ TURNOS: list[dict[str, Any]] = [
         "id": ID_TURNO_ATENDIDO,
         "paciente_id": PACIENTES[3]["id"],
         "odontologo_id": ID_ODONTO_1,
-        "inicio": datetime(2026, 11, 6, 10, 0, tzinfo=UTC),
-        "fin": datetime(2026, 11, 6, 10, 30, tzinfo=UTC),
+        "inicio": _nov(6, 10, 0),
+        "fin": _nov(6, 10, 30),
         "estado": "atendido",
         "canal": "recepcion",
         "idempotency_key": "seed-c13-turno-atendido",
@@ -281,8 +296,8 @@ TURNOS: list[dict[str, Any]] = [
         "id": ID_TURNO_CANCELADO,
         "paciente_id": PACIENTES[4]["id"],
         "odontologo_id": ID_ODONTO_2,
-        "inicio": datetime(2026, 11, 7, 11, 0, tzinfo=UTC),
-        "fin": datetime(2026, 11, 7, 11, 30, tzinfo=UTC),
+        "inicio": _nov(7, 11, 0),
+        "fin": _nov(7, 11, 30),
         "estado": "cancelado",
         "canal": "web",
         "idempotency_key": "seed-c13-turno-cancelado",
@@ -295,8 +310,8 @@ TURNOS: list[dict[str, Any]] = [
         "id": ID_TURNO_REPROGRAMADO,
         "paciente_id": PACIENTES[0]["id"],
         "odontologo_id": ID_ODONTO_1,
-        "inicio": datetime(2026, 11, 8, 12, 0, tzinfo=UTC),
-        "fin": datetime(2026, 11, 8, 12, 30, tzinfo=UTC),
+        "inicio": _nov(8, 12, 0),
+        "fin": _nov(8, 12, 30),
         "estado": "reprogramado",
         "canal": "web",
         "idempotency_key": "seed-c13-turno-reprogramado",
@@ -309,8 +324,8 @@ TURNOS: list[dict[str, Any]] = [
         "id": ID_TURNO_NO_SHOW,
         "paciente_id": PACIENTES[1]["id"],
         "odontologo_id": ID_ODONTO_2,
-        "inicio": datetime(2026, 11, 9, 13, 0, tzinfo=UTC),
-        "fin": datetime(2026, 11, 9, 13, 30, tzinfo=UTC),
+        "inicio": _nov(9, 13, 0),
+        "fin": _nov(9, 13, 30),
         "estado": "no_show",
         "canal": "recepcion",
         "idempotency_key": "seed-c13-turno-no-show",
@@ -323,8 +338,8 @@ TURNOS: list[dict[str, Any]] = [
         "id": ID_TURNO_CREADO_2,
         "paciente_id": PACIENTES[2]["id"],
         "odontologo_id": ID_ODONTO_1,
-        "inicio": datetime(2026, 11, 10, 14, 0, tzinfo=UTC),
-        "fin": datetime(2026, 11, 10, 14, 30, tzinfo=UTC),
+        "inicio": _nov(10, 14, 0),
+        "fin": _nov(10, 14, 30),
         "estado": "creado",
         "canal": "web",
         "idempotency_key": "seed-c13-turno-creado-2",
@@ -337,8 +352,8 @@ TURNOS: list[dict[str, Any]] = [
         "id": ID_TURNO_CONFIRMADO_2,
         "paciente_id": PACIENTES[3]["id"],
         "odontologo_id": ID_ODONTO_2,
-        "inicio": datetime(2026, 11, 11, 15, 0, tzinfo=UTC),
-        "fin": datetime(2026, 11, 11, 15, 30, tzinfo=UTC),
+        "inicio": _nov(11, 15, 0),
+        "fin": _nov(11, 15, 30),
         "estado": "confirmado",
         "canal": "web",
         "idempotency_key": "seed-c13-turno-confirmado-2",
@@ -351,8 +366,8 @@ TURNOS: list[dict[str, Any]] = [
         "id": ID_TURNO_ATENDIDO_2,
         "paciente_id": PACIENTES[4]["id"],
         "odontologo_id": ID_ODONTO_1,
-        "inicio": datetime(2026, 11, 12, 16, 0, tzinfo=UTC),
-        "fin": datetime(2026, 11, 12, 16, 30, tzinfo=UTC),
+        "inicio": _nov(12, 16, 0),
+        "fin": _nov(12, 16, 30),
         "estado": "atendido",
         "canal": "recepcion",
         "idempotency_key": "seed-c13-turno-atendido-2",
@@ -405,11 +420,11 @@ DEVOLUCIONES: list[dict[str, Any]] = [
         "idempotency_key": f"dev_{ID_PAGO_DEVUELTO}",
         "mp_refund_id": "sim_refund_seed_c08_60",
         "aprobada_por": ID_RECEP,
-        "aprobada_at": datetime(2026, 11, 4, 10, 0, tzinfo=UTC),
+        "aprobada_at": _nov(4, 10, 0),
         "rechazada_por": None,
         "rechazada_at": None,
         "ejecutada_por": ID_RECEP,
-        "ejecutada_at": datetime(2026, 11, 4, 10, 5, tzinfo=UTC),
+        "ejecutada_at": _nov(4, 10, 5),
         "is_active": True,
     },
 ]
@@ -426,7 +441,7 @@ COMPROBANTES: list[dict[str, Any]] = [
         "monto": Decimal("65000.00"),
         "moneda": "ARS",
         "cae": None,
-        "emitida_at": datetime(2026, 11, 3, 12, 5, tzinfo=UTC),
+        "emitida_at": _nov(3, 12, 5),
         "simulado": True,
         "payload_json": {
             "concepto": "pago",
@@ -449,7 +464,7 @@ COMPROBANTES: list[dict[str, Any]] = [
         "monto": Decimal("39000.00"),
         "moneda": "ARS",
         "cae": None,
-        "emitida_at": datetime(2026, 11, 4, 10, 6, tzinfo=UTC),
+        "emitida_at": _nov(4, 10, 6),
         "simulado": True,
         "payload_json": {
             "concepto": "devolucion",
@@ -470,7 +485,7 @@ EVENTOS_PAGO: list[dict[str, Any]] = [
         "tipo_evento": "creado",
         "payload_json": {"monto": "65000.00", "moneda": "ARS"},
         "actor": "sistema",
-        "created_at": datetime(2026, 11, 3, 9, 0, tzinfo=UTC),
+        "created_at": _nov(3, 9, 0),
     },
     {
         "id": ID_EVENTO_PAGO_APROBADO_WEBHOOK,
@@ -478,7 +493,7 @@ EVENTOS_PAGO: list[dict[str, Any]] = [
         "tipo_evento": "webhook_recibido",
         "payload_json": {"kind": "pago", "status": "aprobado"},
         "actor": "sistema",
-        "created_at": datetime(2026, 11, 3, 9, 1, tzinfo=UTC),
+        "created_at": _nov(3, 9, 1),
     },
     {
         "id": ID_EVENTO_PAGO_DEVUELTO_CREADO,
@@ -486,7 +501,7 @@ EVENTOS_PAGO: list[dict[str, Any]] = [
         "tipo_evento": "creado",
         "payload_json": {"monto": "65000.00", "moneda": "ARS"},
         "actor": "sistema",
-        "created_at": datetime(2026, 11, 4, 9, 0, tzinfo=UTC),
+        "created_at": _nov(4, 9, 0),
     },
     {
         "id": ID_EVENTO_PAGO_DEVUELTO_WEBHOOK,
@@ -494,7 +509,7 @@ EVENTOS_PAGO: list[dict[str, Any]] = [
         "tipo_evento": "webhook_recibido",
         "payload_json": {"kind": "pago", "status": "aprobado"},
         "actor": "sistema",
-        "created_at": datetime(2026, 11, 4, 9, 1, tzinfo=UTC),
+        "created_at": _nov(4, 9, 1),
     },
     {
         "id": ID_EVENTO_DEV_SOLICITADA,
@@ -502,7 +517,7 @@ EVENTOS_PAGO: list[dict[str, Any]] = [
         "tipo_evento": "devolucion_solicitada",
         "payload_json": {"porcentaje": 60, "monto": "39000.00", "actor_id": str(ID_RECEP)},
         "actor": "recepcionista",
-        "created_at": datetime(2026, 11, 4, 9, 55, tzinfo=UTC),
+        "created_at": _nov(4, 9, 55),
     },
     {
         "id": ID_EVENTO_DEV_APROBADA,
@@ -510,7 +525,7 @@ EVENTOS_PAGO: list[dict[str, Any]] = [
         "tipo_evento": "devolucion_aprobada",
         "payload_json": {"porcentaje": 60, "monto": "39000.00", "actor_id": str(ID_RECEP)},
         "actor": "recepcionista",
-        "created_at": datetime(2026, 11, 4, 10, 0, tzinfo=UTC),
+        "created_at": _nov(4, 10, 0),
     },
     {
         "id": ID_EVENTO_DEV_EJECUTADA,
@@ -523,7 +538,7 @@ EVENTOS_PAGO: list[dict[str, Any]] = [
             "solicitado_por": str(ID_RECEP),
         },
         "actor": "sistema",
-        "created_at": datetime(2026, 11, 4, 10, 5, tzinfo=UTC),
+        "created_at": _nov(4, 10, 5),
     },
 ]
 
@@ -535,7 +550,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": "seed-c08",
-        "fecha": datetime(2026, 11, 3, 9, 0, tzinfo=UTC),
+        "fecha": _nov(3, 9, 0),
         "motivo": "reserva seed C-08",
     },
     {
@@ -545,7 +560,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "confirmado",
         "actor_tipo": "sistema",
         "actor_id": "sistema",
-        "fecha": datetime(2026, 11, 3, 9, 1, tzinfo=UTC),
+        "fecha": _nov(3, 9, 1),
         "motivo": "pago aprobado via webhook (seed C-08)",
     },
     {
@@ -555,7 +570,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": "seed-c08",
-        "fecha": datetime(2026, 11, 4, 9, 0, tzinfo=UTC),
+        "fecha": _nov(4, 9, 0),
         "motivo": "reserva seed C-08",
     },
     {
@@ -565,7 +580,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "confirmado",
         "actor_tipo": "sistema",
         "actor_id": "sistema",
-        "fecha": datetime(2026, 11, 4, 9, 1, tzinfo=UTC),
+        "fecha": _nov(4, 9, 1),
         "motivo": "pago aprobado via webhook (seed C-08)",
     },
     {
@@ -575,7 +590,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "cancelado",
         "actor_tipo": "recepcionista",
         "actor_id": str(ID_RECEP),
-        "fecha": datetime(2026, 11, 4, 9, 55, tzinfo=UTC),
+        "fecha": _nov(4, 9, 55),
         "motivo": "cancelacion fuera de termino (seed C-08)",
     },
     {
@@ -585,7 +600,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "devuelto",
         "actor_tipo": "sistema",
         "actor_id": "sistema",
-        "fecha": datetime(2026, 11, 4, 10, 5, tzinfo=UTC),
+        "fecha": _nov(4, 10, 5),
         "motivo": "devolucion sim_refund_seed_c08_60 ejecutada (seed C-08)",
     },
     {
@@ -595,7 +610,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": str(PACIENTES[2]["id"]),
-        "fecha": datetime(2026, 11, 5, 9, 0, tzinfo=UTC),
+        "fecha": _nov(5, 9, 0),
         "motivo": "reserva seed C-13",
     },
     {
@@ -605,7 +620,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": str(PACIENTES[3]["id"]),
-        "fecha": datetime(2026, 11, 6, 9, 0, tzinfo=UTC),
+        "fecha": _nov(6, 9, 0),
         "motivo": "reserva seed C-13",
     },
     {
@@ -615,7 +630,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "atendido",
         "actor_tipo": "odontologo",
         "actor_id": str(ID_ODONTO_1),
-        "fecha": datetime(2026, 11, 6, 10, 30, tzinfo=UTC),
+        "fecha": _nov(6, 10, 30),
         "motivo": "atendido en consulta (seed C-13)",
     },
     {
@@ -625,7 +640,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": str(PACIENTES[4]["id"]),
-        "fecha": datetime(2026, 11, 7, 9, 0, tzinfo=UTC),
+        "fecha": _nov(7, 9, 0),
         "motivo": "reserva seed C-13",
     },
     {
@@ -635,7 +650,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "cancelado",
         "actor_tipo": "recepcionista",
         "actor_id": str(ID_RECEP),
-        "fecha": datetime(2026, 11, 7, 10, 0, tzinfo=UTC),
+        "fecha": _nov(7, 10, 0),
         "motivo": "cancelacion por paciente (seed C-13)",
     },
     {
@@ -645,7 +660,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": str(PACIENTES[0]["id"]),
-        "fecha": datetime(2026, 11, 8, 9, 0, tzinfo=UTC),
+        "fecha": _nov(8, 9, 0),
         "motivo": "reserva seed C-13",
     },
     {
@@ -655,7 +670,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "reprogramado",
         "actor_tipo": "recepcionista",
         "actor_id": str(ID_RECEP),
-        "fecha": datetime(2026, 11, 8, 11, 0, tzinfo=UTC),
+        "fecha": _nov(8, 11, 0),
         "motivo": "reprogramacion a las 12:00 (seed C-13)",
     },
     {
@@ -665,7 +680,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": str(PACIENTES[1]["id"]),
-        "fecha": datetime(2026, 11, 9, 9, 0, tzinfo=UTC),
+        "fecha": _nov(9, 9, 0),
         "motivo": "reserva seed C-13",
     },
     {
@@ -675,7 +690,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "no_show",
         "actor_tipo": "sistema",
         "actor_id": "sistema",
-        "fecha": datetime(2026, 11, 9, 13, 30, tzinfo=UTC),
+        "fecha": _nov(9, 13, 30),
         "motivo": "no show (seed C-13)",
     },
     {
@@ -685,7 +700,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": str(PACIENTES[2]["id"]),
-        "fecha": datetime(2026, 11, 10, 9, 0, tzinfo=UTC),
+        "fecha": _nov(10, 9, 0),
         "motivo": "reserva seed C-13",
     },
     {
@@ -695,7 +710,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": str(PACIENTES[3]["id"]),
-        "fecha": datetime(2026, 11, 11, 9, 0, tzinfo=UTC),
+        "fecha": _nov(11, 9, 0),
         "motivo": "reserva seed C-13",
     },
     {
@@ -705,7 +720,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "confirmado",
         "actor_tipo": "sistema",
         "actor_id": "sistema",
-        "fecha": datetime(2026, 11, 11, 9, 1, tzinfo=UTC),
+        "fecha": _nov(11, 9, 1),
         "motivo": "pago aprobado via webhook (seed C-13)",
     },
     {
@@ -715,7 +730,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "creado",
         "actor_tipo": "paciente",
         "actor_id": str(PACIENTES[4]["id"]),
-        "fecha": datetime(2026, 11, 12, 9, 0, tzinfo=UTC),
+        "fecha": _nov(12, 9, 0),
         "motivo": "reserva seed C-13",
     },
     {
@@ -725,7 +740,7 @@ TURNOS_HISTORIAL: list[dict[str, Any]] = [
         "estado_nuevo": "atendido",
         "actor_tipo": "odontologo",
         "actor_id": str(ID_ODONTO_1),
-        "fecha": datetime(2026, 11, 12, 16, 30, tzinfo=UTC),
+        "fecha": _nov(12, 16, 30),
         "motivo": "atendido en consulta (seed C-13)",
     },
 ]

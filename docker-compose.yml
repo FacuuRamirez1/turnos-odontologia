@@ -117,7 +117,9 @@ services:
       api:
         condition: service_healthy
     environment:
-      VITE_API_BASE_URL: http://localhost:${API_PORT:-8000}
+      # Vacío: el front llama a rutas relativas /api/... y Vite las proxea a `api`
+      # (sin CORS, mismo origen). Ver frontend/vite.config.ts.
+      VITE_API_BASE_URL: ""
     ports:
       - "${WEB_PORT:-5173}:5173"
     volumes:

@@ -83,7 +83,7 @@ def upgrade() -> None:
         sa.CheckConstraint("version >= 1", name="ck_turno_version_positiva"),
         sa.UniqueConstraint("idempotency_key", name="uq_turno_idempotency_key"),
         sa.UniqueConstraint("odontologo_id", "inicio", name="uq_turno_odonto_inicio"),
-        sa.ExcludeConstraint(
+        postgresql.ExcludeConstraint(
             ("odontologo_id", "="),
             (sa.text("tstzrange(inicio, fin)"), "&&"),
             name="ex_turno_no_solape",
